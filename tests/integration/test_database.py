@@ -2,6 +2,7 @@
 
 import asyncio
 
+import asyncpg
 import pytest
 
 from config import MAX_FAILED_VERIFICATIONS
@@ -209,3 +210,19 @@ async def test_every_table_and_index_the_agent_needs_exists():
 async def test_the_pool_stays_within_two_connections():
     pool = await get_pool()
     assert pool.get_max_size() == 2
+
+
+async def test_app_user_cannot_delete_or_change_tables():
+    pool = await get_pool()
+    assert await pool.fetchval("SELECT current_user") == "app_user"
+    await enroll()
+    for statement in (
+        "DELETE FROM enrollments",
+        "TRUNCATE enrollments",
+        "DROP TABLE enrollments",
+        "ALTER TABLE enrollments ADD COLUMN x int",
+        "CREATE TABLE sneaky (id int)",
+    ):
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await pool.execute(statement)
+    assert await count("enrollments") == 1

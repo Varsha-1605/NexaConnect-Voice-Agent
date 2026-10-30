@@ -16,14 +16,18 @@ from config import (
 _pool: asyncpg.Pool | None = None
 
 
-def _dsn() -> str:
-    url = os.environ.get("DATABASE_URL")
-    if not url:
-        raise RuntimeError("DATABASE_URL is not set in .env")
+def clean_url(url: str) -> str:
     # Neon's connection strings include channel_binding, which asyncpg rejects.
     parts = urlsplit(url)
     query = [(k, v) for k, v in parse_qsl(parts.query) if k != "channel_binding"]
     return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def _dsn() -> str:
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set in .env")
+    return clean_url(url)
 
 
 async def init_pool() -> asyncpg.Pool:

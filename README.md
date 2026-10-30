@@ -133,7 +133,10 @@ Rules that apply to every call:
    LIVEKIT_API_SECRET=
    OPENAI_API_KEY=
    PINECONE_API_KEY=
-   DATABASE_URL=
+   DATABASE_URL=            # the limited app_user (created by `python -m db.create_app_user`)
+   ADMIN_DATABASE_URL=      # the Neon owner string; only for db.setup and db.create_app_user
+   TEST_DATABASE_URL=       # app_user on the Neon test branch (integration tests)
+   TEST_ADMIN_DATABASE_URL= # owner string of the test branch
    HUMAN_TRANSFER_NUMBER=   # E.164, e.g. +15551234567; only used on phone calls
    PINECONE_INDEX_NAME=     # optional, defaults to nexaconnect-kb
    PINECONE_NAMESPACE=      # production (default) or test
