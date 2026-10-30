@@ -24,16 +24,26 @@ async def index(request: web.Request) -> web.FileResponse:
 
 
 async def token(request: web.Request) -> web.Response:
-    """A token for a new room; it also asks LiveKit to dispatch the named agent into it."""
+    """A token for a new room; it also asks LiveKit to dispatch the named agent into it.
+    Local testing only: the deployed page uses the Lambda in token_api/, which also checks Turnstile."""
     room = f"web-{uuid.uuid4().hex[:8]}"
     jwt = (
         api.AccessToken(os.environ["LIVEKIT_API_KEY"], os.environ["LIVEKIT_API_SECRET"])
         .with_identity(f"customer-{uuid.uuid4().hex[:6]}")
-        .with_grants(api.VideoGrants(room_join=True, room=room))
+        .with_grants(
+            api.VideoGrants(
+                room_join=True,
+                room=room,
+                can_publish=True,
+                can_subscribe=True,
+                can_publish_data=True,
+                can_publish_sources=["microphone"],
+            )
+        )
         .with_room_config(
             api.RoomConfiguration(agents=[api.RoomAgentDispatch(agent_name=AGENT_NAME)])
         )
-        .with_ttl(timedelta(minutes=15))
+        .with_ttl(timedelta(minutes=10))
         .to_jwt()
     )
     return web.json_response({"url": os.environ["LIVEKIT_URL"], "token": jwt})
@@ -43,7 +53,7 @@ app = web.Application()
 app.add_routes(
     [
         web.get("/", index),
-        web.get("/token", token),
+        web.post("/api/token", token),
         web.static("/static", Path(__file__).parent / "static"),
     ]
 )
