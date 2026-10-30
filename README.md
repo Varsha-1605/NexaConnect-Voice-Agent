@@ -136,13 +136,18 @@ Rules that apply to every call:
    DATABASE_URL=
    HUMAN_TRANSFER_NUMBER=   # E.164, e.g. +15551234567; only used on phone calls
    PINECONE_INDEX_NAME=     # optional, defaults to nexaconnect-kb
+   PINECONE_NAMESPACE=      # production (default) or test
+   AGENT_NAME=              # nexaconnect-ashley (default); use nexaconnect-ashley-test for a local test worker
+   BUSINESS_TIMEZONE=       # optional, defaults to America/New_York
+   # All other settings (timeouts, model names, limits) are constants in config.py.
    ```
 
 3. Create the database tables and build the knowledge base:
 
    ```bash
    uv run python -m db.setup
-   uv run python -m kb.ingest
+   uv run python -m kb.ingest --namespace production
+   uv run python -m kb.ingest --namespace test
    ```
 
 ## Run it

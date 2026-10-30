@@ -1,19 +1,15 @@
-from datetime import date, datetime
+import logging
+from datetime import date
 
-from livekit.agents import RunContext, ToolError, function_tool, get_job_context
+from livekit.agents import RunContext, ToolError, function_tool
 
 from services import availability, enrollment_service, validation
-from utils import publish_reference, spell_reference
+from utils import business_now, call_id, initials, publish_reference, spell_reference
 
 from .workflow_task import CallState, WorkflowOutcome, WorkflowResult, WorkflowTask
 from .shared_tools import search_knowledge_base, validate_customer_details
 
-
-def _call_id() -> str:
-    try:
-        return get_job_context().job.id
-    except RuntimeError:  # not running inside a job
-        return "no-job"
+logger = logging.getLogger("voice-agent")
 
 
 def _confirmation(reference: str, installation_date: str | None) -> str:
@@ -36,7 +32,7 @@ class EnrollmentWorkflow(WorkflowTask):
         """Get the current date, weekday and local time. Always call it before
         offering installation dates or turning relative dates like "next Monday"
         or "tomorrow" into YYYY-MM-DD. Never assume the year."""
-        return datetime.now().strftime("%A, %B %d, %Y at %I:%M %p")
+        return business_now().strftime("%A, %B %d, %Y at %I:%M %p")
 
     @function_tool()
     async def check_service_availability(
@@ -114,20 +110,35 @@ class EnrollmentWorkflow(WorkflowTask):
             raise ToolError(f"{details['plan_name']} is not offered in {area['city']}.")
 
         context.session.say("One moment while I submit your enrollment.")
-        reference = enrollment_service.submit_enrollment_in_background(
-            idempotency_key=f"{_call_id()}:{details['phone_number']}",
-            customer_name=details["customer_name"],
-            phone_number=details["phone_number"],
-            email=details.get("email"),
-            service_address=details["service_address"],
-            city=area["city"],
-            state=area["state"],
-            postal_code=details["postal_code"],
-            plan_name=details["plan_name"],
-            monthly_plan_price=monthly_plan_price,
-            router_rental_selected=router_rental_selected,
-            preferred_installation_date=details.get("preferred_installation_date"),
-        )
+        try:
+            reference = await enrollment_service.save_enrollment(
+                idempotency_key=f"{call_id()}:{details['phone_number']}",
+                customer_name=details["customer_name"],
+                phone_number=details["phone_number"],
+                email=details.get("email"),
+                service_address=details["service_address"],
+                city=area["city"],
+                state=area["state"],
+                postal_code=details["postal_code"],
+                plan_name=details["plan_name"],
+                monthly_plan_price=monthly_plan_price,
+                router_rental_selected=router_rental_selected,
+                preferred_installation_date=details.get("preferred_installation_date"),
+            )
+        except Exception as e:
+            logger.error(
+                "Enrollment could not be saved: %s",
+                type(e).__name__,
+                extra={"event": "db_save_failed", "workflow": "enrollment"},
+            )
+            raise ToolError(
+                "The enrollment could not be saved. Nothing was submitted. Tell the customer "
+                "the enrollment was not submitted and offer a team member."
+            ) from e
+
+        # Set only after a real save, so an availability check alone doesn't block a sign-up.
+        context.userdata.enrollment_completed = True
+        logger.info("Enrollment %s saved", reference, extra={"event": "enrollment_saved"})
 
         # Not awaited (it would deadlock inside this speech); returning None skips the model's reply.
         speech = context.session.say(
@@ -136,10 +147,12 @@ class EnrollmentWorkflow(WorkflowTask):
         )
         await publish_reference("Enrollment", reference)
         summary = (
-            f"Enrolled {details['customer_name']} in {details['plan_name']} in {area['city']}, "
+            f"Enrolled {initials(details['customer_name'])} in {details['plan_name']} in {area['city']}, "
             f"{area['state']}. Reference {reference}. "
             "The customer was already given the reference and preferred date."
         )
-        speech.add_done_callback(
-            lambda _: self.complete(WorkflowResult(WorkflowOutcome.COMPLETED, summary))
-        )
+        def complete_workflow(_) -> None:
+            if not self.done():  # a repeated tool call must not complete the task twice
+                self.complete(WorkflowResult(WorkflowOutcome.COMPLETED, summary))
+
+        speech.add_done_callback(complete_workflow)

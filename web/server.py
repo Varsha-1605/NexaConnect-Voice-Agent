@@ -1,4 +1,5 @@
 import os
+import sys
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -9,7 +10,12 @@ from livekit import api
 
 load_dotenv()
 
-AGENT_NAME = "my-agent"
+# Run as `python web/server.py`, so the project root (where config.py is) is added to the path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# AGENT_NAME must match the agent you run: "nexaconnect-ashley-test" when testing with a local test worker.
+from config import AGENT_NAME  # noqa: E402
+
 PAGE = Path(__file__).parent / "index.html"
 
 

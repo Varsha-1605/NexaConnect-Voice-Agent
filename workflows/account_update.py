@@ -75,12 +75,17 @@ class AccountUpdateWorkflow(WorkflowTask):
         try:
             await account_service.update_account(reference, field, changes)
         except Exception as e:
-            logger.error("Account update for %s could not be saved: %s", reference, type(e).__name__)
+            logger.error(
+                "Account update for %s could not be saved: %s",
+                reference,
+                type(e).__name__,
+                extra={"event": "db_save_failed", "workflow": "account_update"},
+            )
             raise ToolError(
                 "The change could not be saved. Nothing was changed. "
                 "Tell the customer and offer a team member."
             ) from e
 
         self._pending = None
-        logger.info("Account %s: %s updated", reference, field)
+        logger.info("Account %s: %s updated", reference, field, extra={"event": "account_updated"})
         return {"updated": field, **changes}

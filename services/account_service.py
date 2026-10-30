@@ -1,6 +1,8 @@
+import hashlib
 import re
 
-from db.pool import get_pool
+from db.pool import get_pool, read_row, read_rows, read_value
+from config import LOCKOUT_HOURS, MAX_FAILED_VERIFICATIONS
 from services import availability, validation
 
 CANCELLED_STATUS = "cancellation_requested"
@@ -35,7 +37,7 @@ async def find_account(
     Prefers an account that is not already cancelled.
     """
     phone = validation.validate(phone_number=phone_number)["normalized"].get("phone_number")
-    rows = await (await get_pool()).fetch(
+    rows = await read_rows(
         """
         SELECT enrollment_reference, service_address
         FROM enrollments
@@ -50,13 +52,40 @@ async def find_account(
     spoken = _normalize_address(service_address)
     for row in rows:
         stored = _normalize_address(row["service_address"])
-        if len(spoken) >= 5 and (stored in spoken or spoken in stored):
+        # Exact match. The caller may add the city after the street ("21 jane st new york"),
+        # but "12 main st" must never match "112 main st".
+        if spoken == stored or spoken.startswith(stored + " "):
             return row["enrollment_reference"]
     return None
 
 
+def _address_hash(service_address: str) -> str:
+    """Failed attempts are stored by hash, so no raw address is kept for them."""
+    return hashlib.sha256(_normalize_address(service_address).encode()).hexdigest()
+
+
+async def verification_locked(service_address: str) -> bool:
+    """True if this address had too many failed verifications in the last LOCKOUT_HOURS."""
+    failures = await read_value(
+        """
+        SELECT count(*) FROM verification_failures
+        WHERE address_hash = $1 AND failed_at > NOW() - make_interval(hours => $2)
+        """,
+        _address_hash(service_address),
+        LOCKOUT_HOURS,
+    )
+    return failures >= MAX_FAILED_VERIFICATIONS
+
+
+async def record_failed_verification(service_address: str) -> None:
+    await (await get_pool()).execute(
+        "INSERT INTO verification_failures (address_hash) VALUES ($1)",
+        _address_hash(service_address),
+    )
+
+
 async def get_account(enrollment_reference: str) -> dict:
-    row = await (await get_pool()).fetchrow(
+    row = await read_row(
         """
         SELECT plan_name, monthly_plan_price, router_rental_selected, city, state,
                enrollment_status, created_at

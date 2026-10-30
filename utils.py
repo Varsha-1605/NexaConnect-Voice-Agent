@@ -1,8 +1,13 @@
 import logging
 import os
+import re
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import yaml
 from livekit.agents import get_job_context
+
+from config import BUSINESS_TIMEZONE
 
 logger = logging.getLogger("voice-agent")
 
@@ -32,6 +37,51 @@ async def publish_reference(kind: str, reference: str) -> None:
         )
     except Exception as e:
         logger.warning("Could not publish the %s reference: %s", kind, type(e).__name__)
+
+
+def call_id() -> str:
+    """The current job's ID, used in idempotency keys so a repeated tool call saves once."""
+    try:
+        return get_job_context().job.id
+    except RuntimeError:  # not running inside a job (tests, scripts)
+        return "no-job"
+
+
+def business_now() -> datetime:
+    """Current time in the business time zone (BUSINESS_TIMEZONE, default America/New_York).
+
+    LiveKit Cloud runs on UTC, so plain datetime.now() would give the wrong day in US evenings.
+    """
+    return datetime.now(ZoneInfo(BUSINESS_TIMEZONE))
+
+
+def business_today() -> date:
+    return business_now().date()
+
+
+_EMAIL = re.compile(r"\b([A-Za-z0-9._%+-])[A-Za-z0-9._%+-]*@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b")
+_PHONE = re.compile(r"(?<![\w-])\+?\d[\d\s().-]{6,}\d(?![\w-])")
+
+
+def _mask_phone(match: re.Match) -> str:
+    digits = re.sub(r"\D", "", match.group())
+    if len(digits) < 10:  # dates, ZIP codes and amounts are not phone numbers
+        return match.group()
+    return "*" * (len(digits) - 4) + digits[-4:]
+
+
+def mask_personal_details(text: str) -> str:
+    """Hide emails and phone numbers before logging, e.g. m***@example.com, *******4567.
+
+    Names inside free text can't be found reliably, so code that knows a name should log
+    `initials(name)` instead of the name itself.
+    """
+    return _PHONE.sub(_mask_phone, _EMAIL.sub(r"\1***@\2", text))
+
+
+def initials(name: str) -> str:
+    """'Maria Lopez' -> 'M. L.'"""
+    return " ".join(f"{part[0].upper()}." for part in name.split())
 
 
 def spoken_date(day) -> str:

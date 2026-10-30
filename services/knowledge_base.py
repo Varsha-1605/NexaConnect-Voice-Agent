@@ -2,23 +2,33 @@
 
 import asyncio
 import logging
-import os
 import re
 import ssl
+import threading
+import time
 from functools import lru_cache
 
 import certifi
 from langchain_openai import OpenAIEmbeddings
 from langchain_pinecone import PineconeVectorStore
 
-EMBEDDING_MODEL = "text-embedding-3-small"
-EMBEDDING_DIMENSIONS = 1536
+from config import (
+    EMBEDDING_DIMENSIONS,
+    EMBEDDING_MODEL,
+    KEEPALIVE_INTERVAL,
+    PINECONE_INDEX_NAME,
+    PINECONE_NAMESPACE,
+    PREWARM_KB_TIMEOUT,
+    SEARCH_RESULTS,
+    SEARCH_TIMEOUT,
+)
 
 logger = logging.getLogger("voice-agent")
 
-# Pinecone drops an idle connection after a few seconds and reconnecting costs 1-2.5 s.
-# A tiny query this often keeps it open during a call.
-KEEPALIVE_INTERVAL = 4.0
+UNAVAILABLE = (
+    "The knowledge base is not available right now. Tell the customer you can't check that "
+    "at the moment and offer a team member. Do not answer from memory."
+)
 
 # Embedded in prewarm so common questions skip the OpenAI round trip.
 # Includes the phrasings the model actually used in console calls.
@@ -48,10 +58,16 @@ COMMON_QUERIES = [
 
 _query_embeddings: dict[str, list[float]] = {}
 _keepalive_task: asyncio.Task | None = None
+_last_search_at = 0.0
 
 
 def index_name() -> str:
-    return os.environ.get("PINECONE_INDEX_NAME", "nexaconnect-kb")
+    return PINECONE_INDEX_NAME
+
+
+def namespace() -> str:
+    """'production' for the deployed agent, 'test' for the test worker and CI."""
+    return PINECONE_NAMESPACE
 
 
 @lru_cache(maxsize=1)
@@ -62,7 +78,17 @@ def embeddings() -> OpenAIEmbeddings:
 @lru_cache(maxsize=1)
 def vector_store() -> PineconeVectorStore:
     """Built once per process in prewarm: it looks up the index host with a blocking call."""
-    return PineconeVectorStore(index_name=index_name(), embedding=embeddings())
+    return PineconeVectorStore(index_name=index_name(), embedding=embeddings(), namespace=namespace())
+
+
+def prepare_vector_store(timeout: float = PREWARM_KB_TIMEOUT) -> None:
+    """Build the vector store in prewarm without letting a slow Pinecone hang the process.
+    If it isn't ready in time, it is built at call start instead."""
+    thread = threading.Thread(target=vector_store, daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        logger.warning("Pinecone index lookup is slow; it will finish at call start")
 
 
 def share_ssl_context() -> None:
@@ -95,6 +121,9 @@ def warm_up() -> None:
 async def _keep_warm() -> None:
     probe = [1.0] + [0.0] * (EMBEDDING_DIMENSIONS - 1)  # cosine search rejects an all-zero vector
     while True:  # the first ping opens the connection during the greeting
+        if time.monotonic() - _last_search_at < KEEPALIVE_INTERVAL:
+            await asyncio.sleep(KEEPALIVE_INTERVAL)  # a real search just kept it warm
+            continue
         try:
             await vector_store().asimilarity_search_by_vector(probe, k=1)
         except Exception as e:  # a failed ping must not end the loop
@@ -121,6 +150,25 @@ async def _embed_query(query: str) -> list[float]:
     return _query_embeddings[key]
 
 
-async def search(query: str, k: int = 3) -> list[dict]:
-    docs = await vector_store().asimilarity_search_by_vector(await _embed_query(query), k=k)
-    return [{"source": doc.metadata.get("source"), "content": doc.page_content} for doc in docs]
+async def search(query: str, k: int = SEARCH_RESULTS) -> list[dict]:
+    """Top k chunks for the query. Raises on errors or after SEARCH_TIMEOUT."""
+    global _last_search_at
+    _last_search_at = time.monotonic()
+
+    async def run() -> list[dict]:
+        docs = await vector_store().asimilarity_search_by_vector(await _embed_query(query), k=k)
+        return [{"source": doc.metadata.get("source"), "content": doc.page_content} for doc in docs]
+
+    return await asyncio.wait_for(run(), SEARCH_TIMEOUT)
+
+
+async def search_or_unavailable(query: str) -> list[dict] | str:
+    """For tools: the results, or a message telling the agent the knowledge base is down.
+    The agent then says it can't check right now instead of guessing."""
+    try:
+        return await search(query) or "No relevant information found."
+    except Exception as e:
+        logger.warning(
+            "Knowledge base search failed: %s", type(e).__name__, extra={"event": "kb_unavailable"}
+        )
+        return UNAVAILABLE

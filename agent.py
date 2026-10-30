@@ -10,6 +10,7 @@ from livekit.agents import (
     AgentServer,
     AgentSession,
     ConversationItemAddedEvent,
+    ErrorEvent,
     RoomInputOptions,
     RunContext,
     ToolError,
@@ -20,12 +21,24 @@ from livekit.agents import (
     inference,
 )
 from livekit.agents.beta.tools import EndCallTool
-from livekit.agents.inference.llm import llm_from_model_string
 from livekit.agents.llm import ChatMessage
 from livekit.plugins import ai_coustics, silero
+from config import (
+    AGENT_NAME,
+    CUSTOMER_SILENCE_TIMEOUT,
+    ENDPOINT_ALPHA,
+    ENDPOINT_MAX_DELAY,
+    ENDPOINT_MIN_DELAY,
+    FALSE_INTERRUPTION_TIMEOUT,
+    INTERRUPTION_MIN_DURATION,
+    MAX_CALL_SECONDS,
+    PREWARM_KB_TIMEOUT,
+    STILL_THERE_WAIT,
+)
 from db.pool import close_pool, init_pool
 from services import knowledge_base
-from utils import load_prompt
+from utils import load_prompt, mask_personal_details
+from voice_models import build_llm, build_stt, build_tts
 from workflows import (
     AccountUpdateWorkflow,
     BillingQueryWorkflow,
@@ -42,10 +55,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("voice-agent")
 
-# After this many seconds of customer silence (the agent's own speech doesn't count) the agent asks
-# "Are you still there?", then ends the call if the customer still hasn't spoken this long after it.
-CUSTOMER_SILENCE_TIMEOUT = 10.0
-STILL_THERE_WAIT = 3.0
 
 class PrimaryAgent(Agent):
     """Supervisor: stays in control of the call, delegates each request to a
@@ -77,7 +86,11 @@ class PrimaryAgent(Agent):
             request=request,
         )
         logger.info(
-            "%s finished: %s | %s", workflow_cls.__name__, result.outcome.value, result.summary
+            "%s finished: %s | %s",
+            workflow_cls.__name__,
+            result.outcome.value,
+            mask_personal_details(result.summary),
+            extra={"event": "workflow_finished", "workflow": workflow_cls.__name__},
         )
 
         if result.outcome == WorkflowOutcome.ESCALATE:
@@ -127,9 +140,8 @@ class PrimaryAgent(Agent):
                 "The enrollment was already submitted and the customer has its reference. "
                 "Do not start another one. Ask if there is anything else you can help with."
             )
-        result = await self._delegate(context, EnrollmentWorkflow)
-        context.userdata.enrollment_completed = "outcome 'completed'" in result
-        return result
+        # `submit_enrollment` sets enrollment_completed after a successful save.
+        return await self._delegate(context, EnrollmentWorkflow)
 
     @function_tool()
     async def transfer_to_human(self, context: RunContext[CallState], reason: str) -> str:
@@ -138,7 +150,11 @@ class PrimaryAgent(Agent):
         Args:
             reason: Why the transfer is needed, for the human agent.
         """
-        logger.info("Transfer to human requested: %s", reason)
+        logger.info(
+            "Transfer to human requested: %s",
+            mask_personal_details(reason),
+            extra={"event": "transfer_requested"},
+        )
         job_ctx = get_job_context()
         sip_participant = next(
             (
@@ -178,13 +194,31 @@ async def check_in_then_end(session: AgentSession, ctx: agents.JobContext) -> No
     if session.user_state != "away":
         return
     logger.info("Customer still silent, ending the call")
-    session.say(
+    end_call(
+        session,
+        ctx,
         "I haven't heard from you, so I'll end the call now. "
         "Thank you for calling NexaConnect. Goodbye!",
-        allow_interruptions=False,
     )
 
-    # The same hang-up EndCallTool does: close the session, delete the room, end the job.
+
+async def end_at_time_limit(session: AgentSession, ctx: agents.JobContext) -> None:
+    """End the call after MAX_CALL_SECONDS."""
+    await asyncio.sleep(MAX_CALL_SECONDS)
+    logger.info("Call reached the time limit", extra={"event": "max_call_length_reached"})
+    end_call(
+        session,
+        ctx,
+        "We've reached the time limit for this call. If you still need help, please call us "
+        "again. Thank you for calling NexaConnect. Goodbye!",
+    )
+
+
+def end_call(session: AgentSession, ctx: agents.JobContext, goodbye: str) -> None:
+    """Say goodbye, then hang up the same way EndCallTool does: close the session,
+    delete the room, end the job."""
+    session.say(goodbye, allow_interruptions=False)
+
     async def delete_room() -> None:
         await ctx.delete_room()
 
@@ -206,11 +240,11 @@ def prewarm(proc: agents.JobProcess):
     import openai.lib.streaming.chat as _openai_streaming  # noqa: F401
 
     # Reused by every session so its HTTP/SSL setup isn't on the call path.
-    proc.userdata["llm"] = llm_from_model_string("google/gemma-4-31b-it")
+    proc.userdata["llm"] = build_llm()  # primary + backup
 
     # Pinecone index lookup is a blocking HTTP call; do it here, not during a call.
     knowledge_base.share_ssl_context()
-    knowledge_base.vector_store()
+    knowledge_base.prepare_vector_store(timeout=PREWARM_KB_TIMEOUT)
     # Background thread: prewarm has a 10 s limit and this is a network call.
     threading.Thread(target=knowledge_base.warm_up, daemon=True).start()
 
@@ -219,7 +253,7 @@ server = AgentServer()
 server.setup_fnc = prewarm
 
 
-@server.rtc_session(agent_name="my-agent")
+@server.rtc_session(agent_name=AGENT_NAME)
 async def entrypoint(ctx: agents.JobContext):
     logger.info(f"Connecting to room: {ctx.room.name}")
 
@@ -234,24 +268,24 @@ async def entrypoint(ctx: agents.JobContext):
 
     session = AgentSession[CallState](
         userdata=CallState(),
-        stt="deepgram/nova-3:en",
+        stt=build_stt(),
         llm=ctx.proc.userdata["llm"],
-        tts="cartesia/sonic-3:9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",
+        tts=build_tts(),
         vad=ctx.proc.userdata["vad"],
         user_away_timeout=CUSTOMER_SILENCE_TIMEOUT,
         turn_handling=TurnHandlingOptions(
             turn_detection=inference.TurnDetector(),
             endpointing={
                 "mode": "dynamic",
-                "min_delay": 0.2,
-                "max_delay": 0.5,
-                "alpha": 0.5,
+                "min_delay": ENDPOINT_MIN_DELAY,
+                "max_delay": ENDPOINT_MAX_DELAY,
+                "alpha": ENDPOINT_ALPHA,
             },
             interruption={
                 "mode": "adaptive",
-                "min_duration": 0.5,
+                "min_duration": INTERRUPTION_MIN_DURATION,
                 "min_words": 0,
-                "false_interruption_timeout": 1.0,
+                "false_interruption_timeout": FALSE_INTERRUPTION_TIMEOUT,
                 "resume_false_interruption": True,
             },
             preemptive_generation={
@@ -260,6 +294,17 @@ async def entrypoint(ctx: agents.JobContext):
             },
         ),
     )
+
+    @session.on("error")
+    def log_model_error(event: ErrorEvent) -> None:
+        # A provider failed; the backup (if any) takes over. Recoverable errors don't end the call.
+        logger.warning(
+            "%s error from %s (recoverable: %s)",
+            type(event.error).__name__,
+            getattr(event.source, "model", type(event.source).__name__),
+            getattr(event.error, "recoverable", None),
+            extra={"event": "model_fallback"},
+        )
 
     @session.on("conversation_item_added")
     def log_turn_latency(event: ConversationItemAddedEvent) -> None:
@@ -299,6 +344,13 @@ async def entrypoint(ctx: agents.JobContext):
             ),
         ),
     )
+
+    time_limit = asyncio.create_task(end_at_time_limit(session, ctx))
+
+    async def stop_time_limit() -> None:
+        time_limit.cancel()
+
+    ctx.add_shutdown_callback(stop_time_limit)
 
     await session.generate_reply(
         instructions=(

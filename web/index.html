@@ -353,7 +353,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.15.4/dist/livekit-client.umd.min.js"></script>
 <script>
-const { Room, RoomEvent, Track, ParticipantKind } = LivekitClient;
+const { Room, RoomEvent, Track, ParticipantKind, DisconnectReason } = LivekitClient;
 
 const $ = (id) => document.getElementById(id);
 const orb = $("orb"), stateEl = $("state"), timerEl = $("timer");
@@ -380,6 +380,12 @@ let level = 0;
 let startedAt = 0;
 let timerId = 0;
 let localTurns = 0;
+// Dropped-call handling: who ended the call, and a message to show when it ends.
+const NO_AGENT_SECONDS = 15;
+let endedByUser = false;
+let agentJoined = false;
+let endMessage = "";
+let noAgentTimer = 0;
 const bubbles = new Map(); // segment id -> bubble element
 
 function render() {
@@ -521,6 +527,12 @@ function applyAgentState(value) {
   if (LABELS[agentState]) setState(agentState);
 }
 
+// End the call and show `text` instead of "Session ended".
+function endWithMessage(text) {
+  endMessage = text;
+  room?.disconnect();
+}
+
 function startTimer() {
   startedAt = Date.now();
   timerId = setInterval(() => {
@@ -542,11 +554,16 @@ async function start() {
   muted = false;
   muteBtn.setAttribute("aria-pressed", "false");
   slash.hidden = true;
+  endedByUser = false;
+  agentJoined = false;
+  endMessage = "";
   setState("connecting");
   try {
     audioCtx ??= new AudioContext();
     await audioCtx.resume();
-    const { url, token } = await (await fetch("/token")).json();
+    const response = await fetch("/token");
+    if (!response.ok) throw new Error("the call service is not responding. Please try again in a minute");
+    const { url, token } = await response.json();
     room = new Room();
     room.registerTextStreamHandler("lk.transcription", onTranscription);
     room.registerTextStreamHandler("reference", onReference);
@@ -557,23 +574,38 @@ async function start() {
     });
     room.on(RoomEvent.ParticipantConnected, (p) => {
       if (p.kind !== ParticipantKind.AGENT) return;
+      agentJoined = true;
+      clearTimeout(noAgentTimer);
       startTimer();
       applyAgentState(p.attributes["lk.agent.state"] ?? "initializing");
     });
     room.on(RoomEvent.ParticipantAttributesChanged, (changed, p) => {
       if (p.kind === ParticipantKind.AGENT && "lk.agent.state" in changed) applyAgentState(changed["lk.agent.state"]);
     });
+    // A normal hang-up by Ashley deletes the room. If she leaves and the room stays, she dropped.
+    room.on(RoomEvent.ParticipantDisconnected, (p) => {
+      if (p.kind !== ParticipantKind.AGENT) return;
+      setTimeout(() => {
+        if (room?.state === "connected") endWithMessage("The call was disconnected. Please call again.");
+      }, 1500);
+    });
     room.on(RoomEvent.Disconnected, onEnded);
     await room.connect(url, token);
     await room.localParticipant.setMicrophoneEnabled(true);
     const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone);
     meters.mic = makeMeter(mic.track.mediaStreamTrack);
+    noAgentTimer = setTimeout(() => {
+      if (!agentJoined) endWithMessage("Ashley is busy right now. Please try again in a minute.");
+    }, NO_AGENT_SECONDS * 1000);
   } catch (error) {
     room?.removeAllListeners();
     room?.disconnect();
     room = null;
     setState("idle");
-    stateEl.textContent = `Could not connect: ${error.message}`;
+    stateEl.textContent =
+      error.name === "NotAllowedError"
+        ? "Microphone access is blocked. Allow the microphone for this site in your browser settings, then try again."
+        : `Could not connect: ${error.message}`;
     toggle.disabled = false;
     return;
   }
@@ -584,19 +616,28 @@ async function start() {
   animate();
 }
 
-function onEnded() {
+function onEnded(reason) {
   room = null;
+  clearTimeout(noAgentTimer);
   clearInterval(timerId);
   meters = { agent: null, mic: null };
   document.querySelectorAll("audio").forEach((el) => el.remove());
   orb.style.setProperty("--level", 0);
   setState("ended");
   setConnectedUi(false);
-  toggle.textContent = "Start new session";
+  // Ending normally: the customer clicked End, or Ashley hung up (which deletes the room).
+  const normal = endedByUser || reason === DisconnectReason.ROOM_DELETED;
+  const message = endMessage || (normal ? "" : "The call was disconnected. Please call again.");
+  if (message) stateEl.textContent = message;
+  toggle.textContent = message ? "Call again" : "Start new session";
   toggle.disabled = false;
 }
 
-toggle.addEventListener("click", () => (room ? room.disconnect() : start()));
+toggle.addEventListener("click", () => {
+  if (!room) return start();
+  endedByUser = true;
+  room.disconnect();
+});
 
 muteBtn.addEventListener("click", async () => {
   muted = !muted;

@@ -3,9 +3,10 @@
 import re
 from datetime import date, timedelta
 
+from config import MAX_INSTALLATION_DAYS_AHEAD
 from services.availability import all_plan_names
+from utils import business_today
 
-MAX_INSTALLATION_DAYS_AHEAD = 60
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 ZIP_RE = re.compile(r"^\d{5}(-\d{4})?$")
 
@@ -73,7 +74,7 @@ def validate(
         except ValueError:
             errors["preferred_installation_date"] = "Date must be in YYYY-MM-DD format."
         else:
-            today = date.today()
+            today = business_today()
             if chosen <= today:
                 errors["preferred_installation_date"] = "Date must be after today."
             elif chosen > today + timedelta(days=MAX_INSTALLATION_DAYS_AHEAD):

@@ -10,6 +10,8 @@ dependencies = [
     "livekit-agents[silero,turn-detector]~=1.8",
     "livekit-plugins-ai-coustics>=0.3.5",
     "livekit-plugins-deepgram>=1.8.9",
+    "livekit-plugins-openai~=1.8",
     "openai>=3.40.0",
     "python-dotenv>=1.2.4",
+    "tzdata>=2026.6",
 ]

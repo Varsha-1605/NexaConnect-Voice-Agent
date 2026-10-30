@@ -1,22 +1,21 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from enum import Enum
 from typing import Literal
 
 from livekit.agents import AgentTask, ChatContext, function_tool
 
-from utils import load_prompt, spoken_date
-
-UPCOMING_DAYS = 28
+from config import UPCOMING_DAYS
+from utils import business_now, load_prompt, spoken_date
 
 
 def _today_line() -> str:
-    now = datetime.now()
+    now = business_now()
     return f"{spoken_date(now)}, {now.year}"
 
 
 def _upcoming_days() -> str:
-    today = datetime.now()
+    today = business_now()
     return "; ".join(spoken_date(today + timedelta(days=i)) for i in range(1, UPCOMING_DAYS + 1))
 
 

@@ -3,7 +3,7 @@ import logging
 from livekit.agents import ChatContext, RunContext, ToolError, function_tool
 
 from services import billing_service
-from utils import publish_reference, spell_reference
+from utils import call_id, publish_reference, spell_reference
 
 from .workflow_task import CallState, WorkflowTask
 from .shared_tools import run_with_filler, verified_reference, verify_customer
@@ -72,15 +72,25 @@ class BillingQueryWorkflow(WorkflowTask):
             ticket = await run_with_filler(
                 context,
                 "One moment while I create that ticket for you.",
-                billing_service.create_ticket(reference, billing_issue, billing_issue_details),
+                billing_service.create_ticket(
+                    reference,
+                    billing_issue,
+                    billing_issue_details,
+                    idempotency_key=f"{call_id()}:{reference}",
+                ),
             )
         except Exception as e:
-            logger.error("Support ticket for %s could not be saved: %s", reference, type(e).__name__)
+            logger.error(
+                "Support ticket for %s could not be saved: %s",
+                reference,
+                type(e).__name__,
+                extra={"event": "db_save_failed", "workflow": "billing_query"},
+            )
             raise ToolError(
                 "The ticket could not be saved. Nothing was submitted. "
                 "Tell the customer and offer a team member."
             ) from e
 
-        logger.info("Support ticket %s saved", ticket)
+        logger.info("Support ticket %s saved", ticket, extra={"event": "ticket_saved"})
         await publish_reference("Support ticket", ticket)
         return {"ticket_reference": ticket, "spoken_reference": spell_reference(ticket)}

@@ -60,3 +60,22 @@ CREATE TABLE IF NOT EXISTS support_tickets (
     issue_details     TEXT NOT NULL,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Safe to run again: every statement below only adds what is missing.
+
+-- One ticket per call and account, so a repeated tool call can't create a duplicate.
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS idempotency_key TEXT UNIQUE;
+
+-- Failed verifications by hashed address, to lock an address after repeated failures across calls.
+CREATE TABLE IF NOT EXISTS verification_failures (
+    id            BIGSERIAL PRIMARY KEY,
+    address_hash  TEXT NOT NULL,
+    failed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Lookups used on every call.
+CREATE INDEX IF NOT EXISTS enrollments_name_lower ON enrollments (lower(customer_name));
+CREATE INDEX IF NOT EXISTS enrollments_email_lower ON enrollments (lower(email));
+CREATE INDEX IF NOT EXISTS enrollments_phone ON enrollments (phone_number);
+CREATE INDEX IF NOT EXISTS verification_failures_lookup ON verification_failures (address_hash, failed_at);
+CREATE INDEX IF NOT EXISTS support_tickets_enrollment ON support_tickets (enrollment_id);

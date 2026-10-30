@@ -7,6 +7,7 @@ from datetime import date
 
 from livekit.agents import RunContext, ToolError, function_tool
 
+from config import FILLER_DELAY, MAX_VERIFICATION_ATTEMPTS
 from services import account_service, availability, knowledge_base, validation
 from utils import spoken_date
 
@@ -19,10 +20,6 @@ SEARCH_ACKNOWLEDGEMENTS = [
     "Good question, let me find that for you.",
 ]
 
-# A lookup that finishes within this time stays silent; a slower one gets a spoken line.
-FILLER_DELAY = 1.2
-
-MAX_VERIFICATION_ATTEMPTS = 3
 VERIFICATION_LOCKED = (
     "Verification failed too many times. Do not try again; tell the customer kindly "
     "and finish the workflow with `escalate`."
@@ -77,12 +74,16 @@ async def verify_customer(
     if not (email or phone_number):
         raise ToolError("Ask the customer for the email address or phone number on the account.")
 
+    async def look_up() -> str | None:
+        if await account_service.verification_locked(service_address):
+            raise ToolError(VERIFICATION_LOCKED)
+        return await account_service.find_account(customer_name, service_address, email, phone_number)
+
     reference = await run_with_filler(
-        context,
-        "Thank you. One moment while I look up your account.",
-        account_service.find_account(customer_name, service_address, email, phone_number),
+        context, "Thank you. One moment while I look up your account.", look_up()
     )
     if not reference:
+        await account_service.record_failed_verification(service_address)
         state.verification_attempts += 1
         if state.verification_attempts >= MAX_VERIFICATION_ATTEMPTS:
             raise ToolError(f"The details did not match our records. {VERIFICATION_LOCKED}")
@@ -153,5 +154,7 @@ async def search_knowledge_base(context: RunContext[CallState], query: str) -> l
     Args:
         query: The customer's question, rephrased as a short search query.
     """
-    context.session.say(random.choice(SEARCH_ACKNOWLEDGEMENTS))
-    return await knowledge_base.search(query) or "No relevant information found."
+    # The waiting line is only spoken if the search takes longer than FILLER_DELAY.
+    return await run_with_filler(
+        context, random.choice(SEARCH_ACKNOWLEDGEMENTS), knowledge_base.search_or_unavailable(query)
+    )

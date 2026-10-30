@@ -57,7 +57,7 @@ class CancellationWorkflow(WorkflowTask):
         return {
             "plan_name": account["plan_name"],
             "service_ends_on": spoken_date(cancellation_service.effective_date()),
-            "terms": await knowledge_base.search("contract length"),
+            "terms": await knowledge_base.search_or_unavailable("contract length"),
         }
 
     @function_tool()
@@ -91,14 +91,19 @@ class CancellationWorkflow(WorkflowTask):
                 await cancellation_service.submit_cancellation(reference, cancellation_reason.strip())
             )
         except Exception as e:
-            logger.error("Cancellation for %s could not be saved: %s", reference, type(e).__name__)
+            logger.error(
+                "Cancellation for %s could not be saved: %s",
+                reference,
+                type(e).__name__,
+                extra={"event": "db_save_failed", "workflow": "cancellation"},
+            )
             raise ToolError(
                 "The cancellation could not be saved. Nothing was submitted. "
                 "Tell the customer and offer a team member."
             ) from e
 
         context.userdata.cancellation_completed = True
-        logger.info("Cancellation %s saved", cancellation_reference)
+        logger.info("Cancellation %s saved", cancellation_reference, extra={"event": "cancellation_saved"})
 
         summary = (
             f"Cancellation {'was already on file' if already_requested else 'submitted'}. "

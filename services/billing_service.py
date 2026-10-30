@@ -1,14 +1,12 @@
 import json
-import secrets
-from datetime import date
 
-from db.pool import get_pool
-from services.enrollment_service import REFERENCE_ALPHABET
+from db.pool import get_pool, read_row
+from services.enrollment_service import new_reference
 
 
 async def get_bill(enrollment_reference: str) -> dict | None:
     """The account's bill with its line items and payment status, or None if it has none."""
-    row = await (await get_pool()).fetchrow(
+    row = await read_row(
         """
         SELECT b.period_start, b.period_end, b.due_date, b.total_amount, b.line_items,
                b.payment_status, b.amount_paid, b.paid_on
@@ -32,18 +30,27 @@ async def get_bill(enrollment_reference: str) -> dict | None:
     }
 
 
-async def create_ticket(enrollment_reference: str, billing_issue: str, details: str) -> str:
-    """Save a billing support ticket and return its reference."""
-    suffix = "".join(secrets.choice(REFERENCE_ALPHABET) for _ in range(6))
-    reference = f"TKT-{date.today():%Y%m%d}-{suffix}"
-    await (await get_pool()).execute(
+async def create_ticket(
+    enrollment_reference: str, billing_issue: str, details: str, idempotency_key: str
+) -> str:
+    """Save a billing support ticket and return its reference.
+
+    A repeat call with the same idempotency key saves nothing new and returns the first reference.
+    """
+    reference = await (await get_pool()).fetchval(
         """
-        INSERT INTO support_tickets (ticket_reference, enrollment_id, billing_issue, issue_details)
-        SELECT $1, id, $3, $4 FROM enrollments WHERE enrollment_reference = $2
+        INSERT INTO support_tickets
+            (ticket_reference, enrollment_id, billing_issue, issue_details, idempotency_key)
+        SELECT $1, id, $3, $4, $5 FROM enrollments WHERE enrollment_reference = $2
+        ON CONFLICT (idempotency_key) DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
+        RETURNING ticket_reference
         """,
-        reference,
+        new_reference("TKT"),
         enrollment_reference,
         billing_issue,
         details,
+        idempotency_key,
     )
+    if reference is None:
+        raise LookupError("account not found")
     return reference

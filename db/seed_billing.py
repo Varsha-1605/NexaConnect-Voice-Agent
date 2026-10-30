@@ -2,12 +2,13 @@ import asyncio
 import json
 import re
 import sys
-from datetime import date, timedelta
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
 from db.pool import close_pool, get_pool
 from services import availability
+from utils import business_today
 
 SCENARIOS = ("normal", "high", "unpaid", "pending")
 
@@ -50,7 +51,7 @@ async def main(reference: str, scenario: str) -> None:
         items.append({"description": "Technician installation fee", "amount": faq_installation_fee(plan)})
     total = round(sum(i["amount"] for i in items), 2)
 
-    today = date.today()
+    today = business_today()
     period_end = today.replace(day=1) - timedelta(days=1)
     received = scenario in ("normal", "high")
     status = "received" if received else "outstanding" if scenario == "unpaid" else "pending"

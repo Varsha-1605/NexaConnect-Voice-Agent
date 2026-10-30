@@ -1,23 +1,18 @@
 """Cancellation requests, stored in the `cancellations` table in Neon PostgreSQL."""
 
 import calendar
-import secrets
 from datetime import date
 
-from db.pool import get_pool
+from db.pool import get_pool, read_row
 from services.account_service import CANCELLED_STATUS
-from services.enrollment_service import REFERENCE_ALPHABET
+from services.enrollment_service import new_reference
+from utils import business_today
 
 
 def effective_date() -> date:
     """Service ends on the last day of the current billing month (billing follows the calendar month)."""
-    today = date.today()
+    today = business_today()
     return today.replace(day=calendar.monthrange(today.year, today.month)[1])
-
-
-def _new_reference() -> str:
-    suffix = "".join(secrets.choice(REFERENCE_ALPHABET) for _ in range(6))
-    return f"CAN-{date.today():%Y%m%d}-{suffix}"
 
 
 async def submit_cancellation(enrollment_reference: str, reason: str) -> tuple[str, date, bool]:
@@ -38,7 +33,7 @@ async def submit_cancellation(enrollment_reference: str, reason: str) -> tuple[s
         if existing:
             return existing["cancellation_reference"], existing["effective_date"], True
 
-        reference = _new_reference()
+        reference = new_reference("CAN")
         end_date = effective_date()
         await conn.execute(
             """
@@ -62,7 +57,7 @@ async def submit_cancellation(enrollment_reference: str, reason: str) -> tuple[s
 
 
 async def get_status(enrollment_reference: str) -> dict | None:
-    row = await (await get_pool()).fetchrow(
+    row = await read_row(
         """
         SELECT c.cancellation_reference, c.cancellation_status, c.effective_date, c.created_at
         FROM cancellations c JOIN enrollments e ON e.id = c.enrollment_id
