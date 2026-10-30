@@ -35,6 +35,7 @@ from config import (
     PREWARM_KB_TIMEOUT,
     STILL_THERE_WAIT,
 )
+import simulation_support
 from db.pool import close_pool, init_pool
 from services import knowledge_base
 from utils import load_prompt, mask_personal_details
@@ -253,17 +254,22 @@ server = AgentServer()
 server.setup_fnc = prewarm
 
 
-@server.rtc_session(agent_name=AGENT_NAME)
+@server.rtc_session(agent_name=AGENT_NAME, on_simulation_end=simulation_support.check_result)
 async def entrypoint(ctx: agents.JobContext):
     logger.info(f"Connecting to room: {ctx.room.name}")
+    await ctx.connect()
+
+    # In a simulation the database is replaced by an in-memory one (see simulation_support.py).
+    pool = None if simulation_support.use_fake_backend(ctx) else init_pool()
 
     # Open both together so their network waits overlap.
     # If either fails the call still starts; the tool that needs it reports the error.
-    results = await asyncio.gather(init_pool(), knowledge_base.connect(), return_exceptions=True)
-    for name, result in zip(("Database pool", "Pinecone connection"), results):
+    results = await asyncio.gather(*(task for task in (pool, knowledge_base.connect()) if task is not None), return_exceptions=True)
+    for name, result in zip(("Database pool", "Pinecone connection") if pool else ("Pinecone connection",), results):
         if isinstance(result, Exception):
             logger.error("%s could not be opened: %s", name, type(result).__name__)
-    ctx.add_shutdown_callback(close_pool)
+    if pool:
+        ctx.add_shutdown_callback(close_pool)
     ctx.add_shutdown_callback(knowledge_base.disconnect)
 
     session = AgentSession[CallState](

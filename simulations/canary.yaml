@@ -1,0 +1,71 @@
+id: SCNG_canary000001
+name: NexaConnect canary (hourly, against the live agent)
+
+# Three short calls, run every hour against the deployed agent. Everything that reads or writes the
+# database is in memory, so nothing is saved for real. Questions are answered from the real
+# knowledge base, so a Pinecone outage is caught too.
+
+scenarios:
+  - id: SCN_k01askprice1
+    label: Caller asks the price of Home 500
+    instructions: |
+      PERSONA: A quick caller.
+      OPENING LINE: "Hi, how much is the Home 500 plan per month?"
+      DO, IN ORDER:
+      1. Listen to the answer and say "Thanks, that's all."
+    agent_expectations: >
+      Answers that Home 500 costs $55 per month, from the knowledge base. Does not say it
+      cannot check, and does not give a different price.
+    tags:
+      feature: knowledge_base
+    userdata: {}
+
+  - id: SCN_k02enrollful
+    label: Full enrollment (saved in memory only)
+    instructions: |
+      PERSONA: Priya Shah, calm.
+      OPENING LINE: "Hi, I'd like to sign up for internet in Austin."
+      FACTS (only when asked): full name Priya Shah, phone 512 555 0142, street address
+      14 Elm Street, ZIP 78701, no email, take the cheapest plan, no router.
+      DO, IN ORDER:
+      1. Give your details and confirm each read-back with "yes".
+      2. If asked for an installation date, take the first day the agent suggests.
+      3. When asked whether to submit, say "Yes, submit it."
+      4. End the call after you get the reference.
+    agent_expectations: >
+      Completes the enrollment: reads a summary, asks for consent, submits and gives an
+      enrollment reference.
+    tags:
+      feature: enrollment
+    userdata:
+      expected_state:
+        enrollments: 1
+
+  - id: SCN_k03billpaid1
+    label: Customer asks whether the payment arrived
+    instructions: |
+      PERSONA: Maria Lopez, brief.
+      OPENING LINE: "Hi, did you receive my payment for this month's bill?"
+      FACTS (only when asked): full name Maria Lopez, service address 21 Jane Street,
+      email maria@example.com.
+      DO, IN ORDER:
+      1. Answer the verification questions.
+      2. Say "Great, thank you" when told the payment status.
+    agent_expectations: >
+      Verifies the caller and then says the payment was received, from the bill. Does not
+      invent amounts.
+    tags:
+      feature: billing
+    userdata:
+      accounts:
+        - reference: ENR-20261001-MARIA1
+          customer_name: Maria Lopez
+          phone_number: "+17974517506"
+          email: maria@example.com
+          service_address: 21 Jane Street
+          city: Austin
+          state: TX
+          postal_code: "78701"
+          plan_name: Home 500
+          router_rental_selected: true
+          bill: normal
