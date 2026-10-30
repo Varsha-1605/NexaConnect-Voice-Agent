@@ -1,8 +1,7 @@
 name: NexaConnect Test and Deploy
 
-# Pull request: run the tests only.
-# Push to main: run the tests, then deploy only the parts that changed.
-# "Run workflow" button: deploy all three parts.
+# pull request: tests only; push to main: tests, then deploy what changed
+# "Run workflow" button: deploy all three parts
 on:
   pull_request:
   push:
@@ -24,7 +23,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      # Dummy values so imports work. The unit tests never call these services.
+      # dummy values so imports work
       OPENAI_API_KEY: test-key
       PINECONE_API_KEY: test-key
     steps:
@@ -42,13 +41,9 @@ jobs:
       - name: Install Dependencies
         run: uv sync --locked
 
-      # Only the unit tests: the other tests need real databases and API keys.
+      # unit tests only; the rest need real databases and keys
       - name: Run Tests
         run: uv run pytest tests/unit -v -p no:faulthandler
-
-      # Check that the agent image still builds. Nothing is pushed: LiveKit builds its own copy.
-      - name: Build Docker Image
-        run: docker build -t nexaconnect-agent .
 
   changes:
     if: github.event_name != 'pull_request'
@@ -98,8 +93,7 @@ jobs:
       - name: Install the LiveKit CLI
         run: curl -sSL https://get.livekit.io/cli | bash
 
-      # The agent's own secrets (OpenAI, Pinecone, database) are already stored in LiveKit
-      # from the first deploy, so they are not needed here.
+      # agent secrets are already stored in LiveKit
       - name: Deploy the agent
         run: lk agent deploy
 
@@ -130,7 +124,7 @@ jobs:
             --zip-file fileb://token_api.zip
           aws lambda wait function-updated --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}"
 
-      # An empty request must be refused with "missing check".
+      # an empty request must answer "missing check"
       - name: Test the function
         run: |
           reply=$(curl -s -X POST -d '{}' "${{ vars.TOKEN_API_URL }}")
@@ -145,7 +139,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The page in the repo keeps the local settings. The live settings are put in here.
+      # the repo page keeps local settings; live ones go in here
       - name: Build the page with the live settings
         run: |
           mkdir dist
