@@ -1,6 +1,3 @@
-<div align="center">
-<img src="web/static/ashley.png" alt="Ashley" width="220">
-
 # NexaConnect Voice Agent
 
 **A real-time AI voice agent that answers customer calls and resolves the request before the call ends.**
