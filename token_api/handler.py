@@ -1,16 +1,3 @@
-"""AWS Lambda: gives a visitor a short-lived LiveKit token, after a Cloudflare Turnstile check.
-
-POST /api/token   body: {"turnstile": "<token from the page>"}
-                  -> {"url": "wss://...", "token": "<jwt>"}
-
-Only the Python standard library is used, so the code can be pasted into the Lambda console.
-Environment variables (encrypted): LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET,
-TURNSTILE_SECRET, AGENT_NAME.
-Optional: ALLOWED_ORIGIN, the address of the page when it is hosted somewhere else than this Lambda's own
-domain (for example https://nexaconnect-web.pages.dev). Several can be given, separated by commas.
-When the page and this Lambda share one address (CloudFront), leave it unset.
-"""
-
 import base64
 import hashlib
 import hmac
@@ -36,7 +23,6 @@ def reply(status: int, body: dict, extra_headers: dict | None = None) -> dict:
 
 
 def cors_headers(event: dict) -> dict:
-    """Let the browser read the answer only when the request comes from an allowed page."""
     allowed = {item.strip() for item in os.environ.get("ALLOWED_ORIGIN", "").split(",") if item.strip()}
     origin = (event.get("headers") or {}).get("origin", "")
     if origin not in allowed:
@@ -45,7 +31,7 @@ def cors_headers(event: dict) -> dict:
 
 
 def log(event: str, **fields) -> None:
-    # One JSON line per event, so CloudWatch can filter and count them. Never log the token or the visitor's IP.
+    # one JSON line per event; never log the token or IP
     print(json.dumps({"event": event, **fields}))
 
 
@@ -63,8 +49,6 @@ def _b64(data: bytes) -> str:
 
 
 def make_token(api_key: str, api_secret: str, room: str, identity: str, agent_name: str, now: int | None = None) -> str:
-    """A LiveKit access token (an HS256 JWT): join one new room, publish the microphone and data, and have
-    LiveKit send the named agent into the room."""
     now = int(time.time()) if now is None else now
     header = {"alg": "HS256", "typ": "JWT"}
     claims = {

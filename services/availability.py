@@ -26,14 +26,12 @@ def _norm(text: str) -> str:
 
 
 def normalize_state(state: str) -> str:
-    """Accept 'TX', 'tx', or 'Texas' and return 'TX'."""
     s = _norm(state)
     return US_STATES.get(s, s.upper())
 
 
 @lru_cache(maxsize=1)
 def service_areas() -> dict[tuple[str, str], dict]:
-    """Parse the FAQ Service Areas table into {(city, state): {...}}."""
     with open(FAQ_PATH, encoding="utf-8") as f:
         text = f.read()
 
@@ -54,7 +52,6 @@ def service_areas() -> dict[tuple[str, str], dict]:
 
 @lru_cache(maxsize=1)
 def plan_prices() -> dict[str, float]:
-    """Parse the FAQ's Available Plans list into {plan name: monthly price}."""
     with open(FAQ_PATH, encoding="utf-8") as f:
         section = f.read().split("## Available Plans", 1)[1].split("\n## ", 1)[0]
     return {

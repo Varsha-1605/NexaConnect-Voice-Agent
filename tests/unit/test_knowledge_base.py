@@ -1,5 +1,3 @@
-"""Knowledge base search: the timeout and failure behaviour, with Pinecone and OpenAI mocked."""
-
 import asyncio
 
 import pytest

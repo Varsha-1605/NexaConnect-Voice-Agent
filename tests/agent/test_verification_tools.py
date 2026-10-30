@@ -1,5 +1,3 @@
-"""Customer verification: no account data before it, 3 tries per call, lockout across calls."""
-
 import pytest
 from livekit.agents import ToolError
 
@@ -11,8 +9,6 @@ WHO = dict(customer_name="Maria Lopez", service_address="21 Jane Street", email=
 
 @pytest.fixture
 def accounts(monkeypatch):
-    """Fake account lookups. `match` is the reference found (None = no match)."""
-
     class Accounts:
         match = None
         locked = False

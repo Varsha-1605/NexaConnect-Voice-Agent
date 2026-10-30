@@ -1,15 +1,3 @@
-"""Build or update the knowledge base in Pinecone from the files in data/.
-
-    uv run python -m kb.ingest --namespace test
-    uv run python -m kb.ingest --namespace production
-
-Only new or changed files are embedded and uploaded. Chunks of changed or deleted files are
-removed. Nothing else in the index is touched, so this is safe to run any time.
-
-Each chunk ID is "<file>#<file hash>#<chunk number>". Pinecone itself is the record of what is
-already uploaded: if every chunk of a file carries the file's current hash, the file is skipped.
-"""
-
 import argparse
 import hashlib
 import os
@@ -35,7 +23,6 @@ size_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_over
 
 
 def file_key(path: Path) -> str:
-    """A Pinecone-safe name for the file, e.g. 'F&Q Internet Plan.md' -> 'F_Q_Internet_Plan.md'."""
     return re.sub(r"[^A-Za-z0-9._-]", "_", path.name)
 
 
@@ -48,8 +35,6 @@ def is_faq(text: str) -> bool:
 
 
 def split_file(path: Path, text: str) -> list[Document]:
-    """FAQ files: one chunk per question and answer (titles and tables are skipped).
-    Other files: split by heading, then into chunks of about CHUNK_SIZE characters."""
     sections = heading_splitter.split_text(text)
     chunks: list[Document] = []
     if is_faq(text):
@@ -74,7 +59,6 @@ def existing_ids(index, namespace: str, prefix: str = "") -> list[str]:
 
 
 def upload(store: PineconeVectorStore, chunks: list[Document], ids: list[str]) -> None:
-    """Upload in batches; retry a failed batch, then stop with an error (never half-silent)."""
     for start in range(0, len(chunks), UPLOAD_BATCH):
         batch, batch_ids = chunks[start : start + UPLOAD_BATCH], ids[start : start + UPLOAD_BATCH]
         for attempt in range(1, UPLOAD_ATTEMPTS + 1):

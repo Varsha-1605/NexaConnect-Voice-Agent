@@ -5,7 +5,6 @@ from services.enrollment_service import new_reference
 
 
 async def get_bill(enrollment_reference: str) -> dict | None:
-    """The account's bill with its line items and payment status, or None if it has none."""
     row = await read_row(
         """
         SELECT b.period_start, b.period_end, b.due_date, b.total_amount, b.line_items,
@@ -33,10 +32,6 @@ async def get_bill(enrollment_reference: str) -> dict | None:
 async def create_ticket(
     enrollment_reference: str, billing_issue: str, details: str, idempotency_key: str
 ) -> str:
-    """Save a billing support ticket and return its reference.
-
-    A repeat call with the same idempotency key saves nothing new and returns the first reference.
-    """
     reference = await (await get_pool()).fetchval(
         """
         INSERT INTO support_tickets

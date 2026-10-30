@@ -21,8 +21,6 @@ def _upcoming_days() -> str:
 
 @dataclass
 class CallState:
-    """State shared by the primary agent and every workflow for one call."""
-
     customer_verified: bool = False
     verification_attempts: int = 0
     enrollment_reference: str | None = None  # the verified customer's account
@@ -44,16 +42,9 @@ class WorkflowResult:
 
 
 class WorkflowTask(AgentTask[WorkflowResult]):
-    """Base for the four workflows.
-
-    The primary agent awaits a workflow from one of its tools. The workflow takes over the
-    call, tells the customer the outcome, then `finish_workflow` returns a WorkflowResult.
-    Subclasses set `prompt_file` and `shared_tools` and add their own tools as methods.
-    """
-
     prompt_file: str = ""
     shared_tools: list = []
-    opening: str = ""  # Spoken as is on entry, so the first reply doesn't wait for the model.
+    opening: str = ""  # spoken on entry, no model wait
 
     def __init__(self, chat_ctx: ChatContext, customer_verified: bool = False, request: str = ""):
         verification_note = (
@@ -80,8 +71,7 @@ class WorkflowTask(AgentTask[WorkflowResult]):
         self.request = request
 
     async def on_enter(self) -> None:
-        # Not awaited: this task is awaited inside a tool, and awaiting a reply
-        # here would block that tool (see LiveKit Tasks docs).
+        # not awaited: would block this tool
         if self.opening and not self.request:
             self.session.say(self.opening)
         else:

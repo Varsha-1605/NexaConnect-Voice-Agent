@@ -20,7 +20,7 @@ def normalized(**fields):
     return validation.validate(**fields)["normalized"]
 
 
-# ---------------------------------------------------------------- phone
+# phone
 @pytest.mark.parametrize(
     "phone",
     ["7974517506", "(797) 451-7506", "+1 797 451 7506", "1-797-451-7506", "797.451.7506"],
@@ -34,7 +34,7 @@ def test_phone_bad(phone):
     assert "phone_number" in errors(phone_number=phone)
 
 
-# ---------------------------------------------------------------- email
+# email
 def test_email_is_lowercased():
     assert normalized(email=" Maria@Example.COM ") == {"email": "maria@example.com"}
 
@@ -49,7 +49,7 @@ def test_email_is_optional():
     assert validation.validate(email="")["valid"]
 
 
-# ---------------------------------------------------------------- name, address, ZIP
+# name, address, ZIP
 def test_name_spaces_are_cleaned():
     assert normalized(customer_name="  Varsha   Dewangan ") == {"customer_name": "Varsha Dewangan"}
 
@@ -73,7 +73,7 @@ def test_zip_plus_four_is_shortened():
     assert normalized(postal_code="78701-1234") == {"postal_code": "78701"}
 
 
-# ---------------------------------------------------------------- plan
+# plan
 def test_plan_name_is_matched_ignoring_case():
     assert normalized(plan_name=" home 500 ") == {"plan_name": "Home 500"}
 
@@ -83,7 +83,7 @@ def test_unknown_plan_lists_the_real_ones():
     assert "Home 300" in message and "Home 500" in message and "Home Gigabit" in message
 
 
-# ---------------------------------------------------------------- installation date
+# installation date
 @pytest.mark.parametrize(
     "value, ok",
     [

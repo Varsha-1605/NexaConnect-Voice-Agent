@@ -1,5 +1,3 @@
-"""Tools used by more than one agent or workflow."""
-
 import asyncio
 import random
 import time
@@ -13,7 +11,7 @@ from utils import spoken_date
 
 from .workflow_task import CallState
 
-# Spoken while a search runs, so the customer isn't left in silence.
+# spoken while a search runs
 SEARCH_ACKNOWLEDGEMENTS = [
     "Let me check that for you.",
     "Sure, one moment while I look that up.",
@@ -27,10 +25,6 @@ VERIFICATION_LOCKED = (
 
 
 async def run_with_filler(context: RunContext[CallState], line: str, work):
-    """Await `work`, speaking `line` only if it is still running after FILLER_DELAY.
-
-    Fast lookups stay silent. Lookups started together share one line.
-    """
     task = asyncio.ensure_future(work)
     try:
         done, _ = await asyncio.wait({task}, timeout=FILLER_DELAY)
@@ -45,7 +39,6 @@ async def run_with_filler(context: RunContext[CallState], line: str, work):
 
 
 def verified_reference(context: RunContext[CallState]) -> str:
-    """The verified customer's account, or a ToolError if they haven't been verified."""
     if not context.userdata.customer_verified:
         raise ToolError("The customer is not verified yet. Call `verify_customer` first.")
     return context.userdata.enrollment_reference
@@ -154,7 +147,6 @@ async def search_knowledge_base(context: RunContext[CallState], query: str) -> l
     Args:
         query: The customer's question, rephrased as a short search query.
     """
-    # The waiting line is only spoken if the search takes longer than FILLER_DELAY.
     return await run_with_filler(
         context, random.choice(SEARCH_ACKNOWLEDGEMENTS), knowledge_base.search_or_unavailable(query)
     )

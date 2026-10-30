@@ -1,13 +1,3 @@
-"""Create the limited database role the agent connects with (run once per Neon branch, safe to repeat).
-
-    uv run python -m db.create_app_user            # production branch (ADMIN_DATABASE_URL)
-    uv run python -m db.create_app_user --test     # test branch (TEST_ADMIN_DATABASE_URL)
-
-`app_user` can SELECT, INSERT and UPDATE the app tables. It cannot DELETE, create or change tables.
-The script prints the new connection string once, hidden from the log: it is written to .env
-(DATABASE_URL, or TEST_DATABASE_URL with --test). Run it again with --rotate to set a new password.
-"""
-
 import argparse
 import asyncio
 import os
@@ -62,7 +52,7 @@ async def main() -> None:
         if not exists or args.rotate:
             password = secrets.token_urlsafe(24)
             verb = "ALTER" if exists else "CREATE"
-            # Role statements cannot take parameters, so the generated password is inlined (letters, digits, - and _ only).
+            # password is inlined: role statements take no parameters
             await connection.execute(f"{verb} ROLE {ROLE} LOGIN PASSWORD '{password}'")
         await connection.execute(
             f"""

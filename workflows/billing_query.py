@@ -14,8 +14,6 @@ NO_BILL = "No bill is on file for this account yet."
 
 
 class BillingQueryWorkflow(WorkflowTask):
-    """Billing query. Spec: docs/billing_query.md."""
-
     prompt_file = "billing_query_prompt.md"
     opening = "I can help with that. Is it a high bill, an unexpected charge, or a payment issue?"
     shared_tools = [verify_customer]

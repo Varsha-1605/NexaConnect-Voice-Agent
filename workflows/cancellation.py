@@ -29,8 +29,6 @@ def _confirmation(reference: str, end_date: date, already_requested: bool) -> st
 
 
 class CancellationWorkflow(WorkflowTask):
-    """Service cancellation. Spec: docs/cancellation_workflow.md."""
-
     prompt_file = "cancellation_prompt.md"
     opening = (
         "I can help with that. To find your account, I'll need your full name, the street "
@@ -41,7 +39,7 @@ class CancellationWorkflow(WorkflowTask):
 
     def __init__(self, chat_ctx: ChatContext, customer_verified: bool = False, request: str = ""):
         super().__init__(chat_ctx, customer_verified, request)
-        # `submit_cancellation` refuses until the terms have been fetched and explained.
+        # submit_cancellation needs the terms explained first
         self._terms_explained = False
         if customer_verified:
             self.opening = ""  # the reason may already be known, so let the model start
@@ -115,7 +113,7 @@ class CancellationWorkflow(WorkflowTask):
             if not self.done():  # a repeated tool call must not complete the task twice
                 self.complete(WorkflowResult(WorkflowOutcome.COMPLETED, summary))
 
-        # Not awaited (it would deadlock inside this speech). Returning None skips the model's reply.
+        # not awaited: would deadlock; None skips the model reply
         speech = context.session.say(
             _confirmation(cancellation_reference, end_date, already_requested),
             allow_interruptions=False,

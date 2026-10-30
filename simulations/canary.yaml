@@ -1,9 +1,7 @@
 id: SCNG_canary000001
 name: NexaConnect canary (hourly, against the live agent)
 
-# Three short calls, run every hour against the deployed agent. Everything that reads or writes the
-# database is in memory, so nothing is saved for real. Questions are answered from the real
-# knowledge base, so a Pinecone outage is caught too.
+# hourly check of the deployed agent; the database is in memory
 
 scenarios:
   - id: SCN_k01askprice1

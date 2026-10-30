@@ -1,5 +1,3 @@
-"""The token Lambda: refuses without a passed Turnstile check, and makes tokens LiveKit accepts."""
-
 import json
 from datetime import timedelta
 
@@ -32,7 +30,7 @@ def pass_check(monkeypatch, passed=True):
     monkeypatch.setattr(handler, "turnstile_passed", lambda token, ip: passed)
 
 
-# ---------------------------------------------------------------- the token itself
+# the token itself
 def test_token_has_the_same_claims_as_one_made_by_the_livekit_sdk():
     mine = handler.make_token(KEY, SECRET, "web-1234abcd", "customer-abcdef", "nexaconnect-ashley", now=1_000_000)
     sdk = (
@@ -68,7 +66,7 @@ def test_a_token_signed_with_another_secret_is_rejected():
         api.TokenVerifier(KEY, SECRET).verify(token)
 
 
-# ---------------------------------------------------------------- the request
+# the request
 def test_valid_request_gets_a_token_and_the_livekit_url(monkeypatch):
     pass_check(monkeypatch)
     result = handler.lambda_handler(request(json.dumps({"turnstile": "ok"})), None)
@@ -121,7 +119,7 @@ def test_the_token_is_never_written_to_the_log(monkeypatch, capsys):
     assert token not in capsys.readouterr().out
 
 
-# ---------------------------------------------------------------- CORS (page hosted on another address)
+# CORS: page on another address
 PAGE = "https://nexaconnect-web.pages.dev"
 
 

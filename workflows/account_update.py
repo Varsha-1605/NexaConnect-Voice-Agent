@@ -17,15 +17,13 @@ logger = logging.getLogger("voice-agent")
 
 
 class AccountUpdateWorkflow(WorkflowTask):
-    """Account update. Spec: docs/account_update.md."""
-
     prompt_file = "account_update_prompt.md"
     opening = "I can help with that. Which account information would you like to update?"
     shared_tools = [verify_customer, get_account_details, search_knowledge_base]
 
     def __init__(self, chat_ctx: ChatContext, customer_verified: bool = False, request: str = ""):
         super().__init__(chat_ctx, customer_verified, request)
-        # The last change that passed validation. `update_customer_details` saves exactly this.
+        # last validated change; saved as is by update_customer_details
         self._pending: tuple[str, dict] | None = None
 
     @function_tool()

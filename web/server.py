@@ -10,10 +10,8 @@ from livekit import api
 
 load_dotenv()
 
-# Run as `python web/server.py`, so the project root (where config.py is) is added to the path.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-# AGENT_NAME must match the agent you run: "nexaconnect-ashley-test" when testing with a local test worker.
 from config import AGENT_NAME  # noqa: E402
 
 PAGE = Path(__file__).parent / "index.html"
@@ -24,8 +22,6 @@ async def index(request: web.Request) -> web.FileResponse:
 
 
 async def token(request: web.Request) -> web.Response:
-    """A token for a new room; it also asks LiveKit to dispatch the named agent into it.
-    Local testing only: the deployed page uses the Lambda in token_api/, which also checks Turnstile."""
     room = f"web-{uuid.uuid4().hex[:8]}"
     jwt = (
         api.AccessToken(os.environ["LIVEKIT_API_KEY"], os.environ["LIVEKIT_API_SECRET"])
@@ -59,5 +55,5 @@ app.add_routes(
 )
 
 if __name__ == "__main__":
-    # Localhost only, so nobody else on the network can request tokens.
+    # localhost only
     web.run_app(app, host="127.0.0.1", port=8080)

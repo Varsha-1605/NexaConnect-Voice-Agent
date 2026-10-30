@@ -54,15 +54,12 @@ from workflows.shared_tools import search_knowledge_base
 
 load_dotenv()
 
-# LiveKit sets up the log handlers; adding another one here printed every line twice.
+# LiveKit sets up logging
 logger = logging.getLogger("voice-agent")
 logger.setLevel(logging.INFO)
 
 
 class PrimaryAgent(Agent):
-    """Supervisor: stays in control of the call, delegates each request to a
-    workflow (AgentTask), and decides what happens next from its result."""
-
     def __init__(self):
         super().__init__(
             instructions=load_prompt("triage_prompt.md"),
@@ -83,7 +80,6 @@ class PrimaryAgent(Agent):
     ) -> str:
         logger.info("Delegating to %s", workflow_cls.__name__)
         result = await workflow_cls(
-            # Conversation so far, without the primary agent's system prompt.
             chat_ctx=self.chat_ctx.copy(exclude_instructions=True),
             customer_verified=context.userdata.customer_verified,
             request=request,
@@ -143,7 +139,7 @@ class PrimaryAgent(Agent):
                 "The enrollment was already submitted and the customer has its reference. "
                 "Do not start another one. Ask if there is anything else you can help with."
             )
-        # `submit_enrollment` sets enrollment_completed after a successful save.
+        # submit_enrollment sets enrollment_completed
         return await self._delegate(context, EnrollmentWorkflow)
 
     @function_tool()
@@ -191,7 +187,6 @@ class PrimaryAgent(Agent):
 
 
 async def check_in_then_end(session: AgentSession, ctx: agents.JobContext) -> None:
-    """Ask "Are you still there?", then hang up if the customer is still silent STILL_THERE_WAIT later."""
     await session.say("Are you still there?")
     await asyncio.sleep(STILL_THERE_WAIT)
     if session.user_state != "away":
@@ -206,7 +201,6 @@ async def check_in_then_end(session: AgentSession, ctx: agents.JobContext) -> No
 
 
 async def end_at_time_limit(session: AgentSession, ctx: agents.JobContext) -> None:
-    """End the call after MAX_CALL_SECONDS."""
     await asyncio.sleep(MAX_CALL_SECONDS)
     logger.info("Call reached the time limit", extra={"event": "max_call_length_reached"})
     end_call(
@@ -218,8 +212,6 @@ async def end_at_time_limit(session: AgentSession, ctx: agents.JobContext) -> No
 
 
 def end_call(session: AgentSession, ctx: agents.JobContext, goodbye: str) -> None:
-    """Say goodbye, then hang up the same way EndCallTool does: close the session,
-    delete the room, end the job."""
     session.say(goodbye, allow_interruptions=False)
 
     async def delete_room() -> None:
@@ -231,23 +223,21 @@ def end_call(session: AgentSession, ctx: agents.JobContext, goodbye: str) -> Non
 
 
 def prewarm(proc: agents.JobProcess):
-    """Load models and clients once per process so the first call isn't slow."""
     logger.info("Prewarming worker process...")
 
-    # Default 0.55s silence delays every turn; the turn detector handles mid-sentence pauses.
+    # default 0.55s delay slows every turn
     proc.userdata["vad"] = silero.VAD.load(min_silence_duration=0.3)
 
-    # Otherwise imported lazily on the first LLM call, blocking the event loop.
     import anyio._backends._asyncio  # noqa: F401
     import openai.lib.streaming.chat as _openai_streaming  # noqa: F401
 
-    # Reused by every session so its HTTP/SSL setup isn't on the call path.
+    # reused by every session
     proc.userdata["llm"] = build_llm()  # primary + backup
 
-    # Pinecone index lookup is a blocking HTTP call; do it here, not during a call.
+    # blocking call, so done here
     knowledge_base.share_ssl_context()
     knowledge_base.prepare_vector_store(timeout=PREWARM_KB_TIMEOUT)
-    # Background thread: prewarm has a 10 s limit and this is a network call.
+    # thread: prewarm has a 10 s limit
     threading.Thread(target=knowledge_base.warm_up, daemon=True).start()
 
 
@@ -260,11 +250,10 @@ async def entrypoint(ctx: agents.JobContext):
     logger.info(f"Connecting to room: {ctx.room.name}")
     await ctx.connect()
 
-    # In a simulation the database is replaced by an in-memory one (see simulation_support.py).
+    # simulation uses an in-memory database
     pool = None if simulation_support.use_fake_backend(ctx) else init_pool()
 
-    # Open both together so their network waits overlap.
-    # If either fails the call still starts; the tool that needs it reports the error.
+    # open both together; if one fails the call still starts
     results = await asyncio.gather(*(task for task in (pool, knowledge_base.connect()) if task is not None), return_exceptions=True)
     for name, result in zip(("Database pool", "Pinecone connection") if pool else ("Pinecone connection",), results):
         if isinstance(result, Exception):
@@ -304,7 +293,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     @session.on("error")
     def log_model_error(event: ErrorEvent) -> None:
-        # A provider failed; the backup (if any) takes over. Recoverable errors don't end the call.
+        # provider failed; the backup takes over
         logger.warning(
             "%s error from %s (recoverable: %s)",
             type(event.error).__name__,

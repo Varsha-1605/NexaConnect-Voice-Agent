@@ -1,10 +1,3 @@
-"""Speech-to-text, LLM and text-to-speech, each with a backup.
-
-If a primary provider fails (connection error, timeout, 4xx/5xx), the backup takes over, so one
-provider outage doesn't end calls. Test each backup on its own with the critical simulations
-before relying on it.
-"""
-
 import logging
 
 from livekit.agents import inference, llm
@@ -45,7 +38,6 @@ def build_tts() -> inference.TTS:
 
 
 def build_llm() -> llm.FallbackAdapter:
-    """Built once per process in prewarm, so the HTTP/SSL setup isn't on the call path."""
     adapter = llm.FallbackAdapter(
         [llm_from_model_string(PRIMARY_LLM), openai.LLM(model=BACKUP_LLM)],
     )

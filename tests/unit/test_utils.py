@@ -6,7 +6,7 @@ import pytest
 import utils
 
 
-# ---------------------------------------------------------------- masking personal details
+# masking personal details
 @pytest.mark.parametrize(
     "text, expected",
     [
@@ -34,7 +34,7 @@ def test_initials():
     assert utils.initials("varsha  dewangan") == "V. D."
 
 
-# ---------------------------------------------------------------- spoken text
+# spoken text
 def test_spell_reference():
     assert (
         utils.spell_reference("ENR-20261030-U63CHY")
@@ -46,9 +46,8 @@ def test_spoken_date():
     assert utils.spoken_date(date(2026, 11, 8)) == "Sunday, November 8"
 
 
-# ---------------------------------------------------------------- business time zone
+# business time zone
 def freeze_utc(monkeypatch, *args):
-    """Make utils think the current time is this UTC time."""
     moment = datetime(*args, tzinfo=ZoneInfo("UTC"))
 
     class FakeDatetime(datetime):
@@ -70,7 +69,7 @@ def test_business_today_after_midnight_in_new_york(monkeypatch):
     assert utils.business_today() == date(2026, 10, 31)
 
 
-# ---------------------------------------------------------------- prompts
+# prompts
 @pytest.mark.parametrize(
     "name",
     [

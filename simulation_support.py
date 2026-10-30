@@ -1,32 +1,3 @@
-"""Support for simulations (`lk agent simulate`): a fake, in-memory backend.
-
-During a simulation the agent code runs unchanged. Only the functions that read or write the
-database are replaced by in-memory ones that start from the scenario's `userdata`, so a
-simulation never touches a real database. Real database behaviour is covered by tests/integration.
-
-Scenario `userdata`:
-
-    accounts:                      # customers that already exist
-      - reference: ENR-20261001-AAAA11
-        customer_name: Maria Lopez
-        phone_number: "+17974517506"
-        email: maria@example.com
-        service_address: 21 Jane Street
-        city: Austin
-        state: TX
-        postal_code: "78701"
-        plan_name: Home 500
-        router_rental_selected: true
-        bill: high                 # none (default), normal, high, unpaid or pending
-    fail_saves: true               # every save raises, like a database outage
-    expected_state:                # checked when the call ends
-      enrollments: 1               # new enrollments saved
-      cancellations: 0
-      tickets: 0
-      account_changes: 0
-      account_status: {ENR-20261001-AAAA11: cancellation_requested}   # optional
-"""
-
 import logging
 import weakref
 from datetime import timedelta
@@ -37,7 +8,7 @@ from utils import business_today
 
 logger = logging.getLogger("voice-agent")
 
-# One backend per running job, so the end-of-call check can find it.
+# one backend per job, for the end-of-call check
 _backends: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
 
 
@@ -53,8 +24,6 @@ def install(job_context, userdata: dict) -> "FakeBackend":
 
 
 def use_fake_backend(job_context) -> bool:
-    """Call at the start of a job. In a simulation, swap in the fake backend and return True.
-    In a real call do nothing and return False."""
     simulation = job_context.simulation_context()
     if not simulation:
         return False
@@ -64,8 +33,6 @@ def use_fake_backend(job_context) -> bool:
 
 
 async def check_result(simulation) -> None:
-    """At the end of a simulated call: fail it if what was saved isn't what the scenario expects.
-    The judge grades the conversation; this grades the data."""
     expected = simulation.userdata().get("expected_state")
     backend = backend_for(simulation.job_context)
     if expected and backend and (problem := backend.difference_from(expected)):
@@ -92,7 +59,6 @@ class FakeBackend:
         self.failures: list[str] = []
         self._originals: list[tuple] = []
 
-    # ------------------------------------------------------------ bills
     @staticmethod
     def _make_bill(account: dict, scenario: str) -> dict:
         price = availability.plan_prices()[account["plan_name"]]
@@ -116,7 +82,6 @@ class FakeBackend:
             "paid_on": today.isoformat() if paid else None,
         }
 
-    # ------------------------------------------------------------ the fake service functions
     def _down(self) -> None:
         if self.fail_saves:
             raise ConnectionError("simulated database outage")
@@ -210,7 +175,6 @@ class FakeBackend:
             "submitted_on": business_today().isoformat(),
         }
 
-    # ------------------------------------------------------------ installing and removing
     def replace_services(self) -> None:
         replacements = [
             (enrollment_service, "save_enrollment", self.save_enrollment),
@@ -229,14 +193,11 @@ class FakeBackend:
             setattr(module, name, fake)
 
     async def remove(self) -> None:
-        """Put the real functions back (the worker process may run a real call next)."""
         for module, name, original in reversed(self._originals):
             setattr(module, name, original)
         self._originals.clear()
 
-    # ------------------------------------------------------------ the end-of-call check
     def difference_from(self, expected: dict) -> str | None:
-        """Describe the first way the final state differs from `expected`, or None if it matches."""
         actual = {
             "enrollments": len(self.new_enrollments),
             "cancellations": len(self.cancellations),

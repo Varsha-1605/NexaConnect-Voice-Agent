@@ -1,10 +1,3 @@
-"""Integration tests run against the Neon `test` branch and nowhere else.
-
-Put its connection strings in .env: TEST_DATABASE_URL (the limited app_user the agent uses) and
-TEST_ADMIN_DATABASE_URL (the owner, used only to create tables and empty them). Every test starts with the tables emptied,
-so these tests refuse to run unless the target is clearly not the production database.
-"""
-
 import os
 from pathlib import Path
 from urllib.parse import urlsplit

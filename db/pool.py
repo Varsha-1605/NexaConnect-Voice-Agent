@@ -17,7 +17,7 @@ _pool: asyncpg.Pool | None = None
 
 
 def clean_url(url: str) -> str:
-    # Neon's connection strings include channel_binding, which asyncpg rejects.
+    # asyncpg rejects channel_binding
     parts = urlsplit(url)
     query = [(k, v) for k, v in parse_qsl(parts.query) if k != "channel_binding"]
     return urlunsplit(parts._replace(query=urlencode(query)))
@@ -37,7 +37,7 @@ async def init_pool() -> asyncpg.Pool:
             _dsn(),
             min_size=DB_POOL_MIN,
             max_size=DB_POOL_MAX,
-            # Required for Neon's pooled endpoint (PgBouncer in transaction mode).
+            # needed for Neon pooled endpoint
             statement_cache_size=0,
             command_timeout=DB_QUERY_TIMEOUT,
             timeout=DB_CONNECT_TIMEOUT,
@@ -50,7 +50,7 @@ async def get_pool() -> asyncpg.Pool:
     return _pool or await init_pool()
 
 
-# A dropped or timed-out connection is worth one retry; a bad query is not.
+# retry dropped connections, not bad queries
 RETRYABLE_ERRORS = (
     asyncpg.PostgresConnectionError,
     asyncpg.InterfaceError,
@@ -61,8 +61,6 @@ RETRYABLE_ERRORS = (
 
 
 async def run_read_with_retry(read):
-    """Run `read` (a function returning a new coroutine) and retry once after DB_READ_RETRY_DELAY
-    on a connection error. Only for reads: writes rely on idempotency keys instead."""
     try:
         return await read()
     except RETRYABLE_ERRORS:
@@ -71,17 +69,14 @@ async def run_read_with_retry(read):
 
 
 async def read_rows(query: str, *args) -> list:
-    """SELECT many rows, with one retry on a connection error."""
     return await run_read_with_retry(lambda: _pool_call("fetch", query, args))
 
 
 async def read_row(query: str, *args):
-    """SELECT one row (or None), with one retry on a connection error."""
     return await run_read_with_retry(lambda: _pool_call("fetchrow", query, args))
 
 
 async def read_value(query: str, *args):
-    """SELECT one value, with one retry on a connection error."""
     return await run_read_with_retry(lambda: _pool_call("fetchval", query, args))
 
 

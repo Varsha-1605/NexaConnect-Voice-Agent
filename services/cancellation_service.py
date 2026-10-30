@@ -1,5 +1,3 @@
-"""Cancellation requests, stored in the `cancellations` table in Neon PostgreSQL."""
-
 import calendar
 from datetime import date
 
@@ -10,17 +8,11 @@ from utils import business_today
 
 
 def effective_date() -> date:
-    """Service ends on the last day of the current billing month (billing follows the calendar month)."""
     today = business_today()
     return today.replace(day=calendar.monthrange(today.year, today.month)[1])
 
 
 async def submit_cancellation(enrollment_reference: str, reason: str) -> tuple[str, date, bool]:
-    """Save the request and mark the account as cancelled.
-
-    Returns (cancellation_reference, service_end_date, already_requested). An account that
-    already has a request gets that request back instead of a second one.
-    """
     async with (await get_pool()).acquire() as conn, conn.transaction():
         enrollment_id = await conn.fetchval(
             "SELECT id FROM enrollments WHERE enrollment_reference = $1 FOR UPDATE",

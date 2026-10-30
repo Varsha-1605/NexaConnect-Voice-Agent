@@ -1,5 +1,3 @@
-"""Knowledge base chunking: stable IDs and one chunk per FAQ question."""
-
 import re
 from pathlib import Path
 

@@ -1,5 +1,3 @@
-"""Services against a real database (the Neon `test` branch)."""
-
 import asyncio
 
 import asyncpg
@@ -32,7 +30,7 @@ async def count(table: str) -> int:
     return await (await get_pool()).fetchval(f"SELECT count(*) FROM {table}")
 
 
-# ---------------------------------------------------------------- enrollments
+# enrollments
 async def test_enrollment_is_saved():
     reference = await enroll()
     row = await (await get_pool()).fetchrow("SELECT * FROM enrollments WHERE enrollment_reference = $1", reference)
@@ -56,7 +54,7 @@ async def test_different_keys_make_different_enrollments():
     assert first != second and await count("enrollments") == 2
 
 
-# ---------------------------------------------------------------- finding an account
+# finding an account
 async def test_account_is_found_by_name_address_and_email():
     reference = await enroll()
     assert await account_service.find_account("Maria Lopez", "21 Jane Street", email="maria@example.com") == reference
@@ -88,7 +86,7 @@ async def test_a_cancelled_account_is_found_after_an_active_one_with_the_same_de
     assert await account_service.find_account("Maria Lopez", "21 Jane Street", email="maria@example.com") == new
 
 
-# ---------------------------------------------------------------- lockout
+# lockout
 async def test_address_locks_at_the_limit_and_only_that_address():
     address = "21 Jane Street"
     for _ in range(MAX_FAILED_VERIFICATIONS - 1):
@@ -114,7 +112,7 @@ async def test_no_raw_address_is_stored_for_failures():
     assert "jane" not in str(dict(row)).lower()
 
 
-# ---------------------------------------------------------------- tickets
+# tickets
 async def test_ticket_is_saved_once_per_key():
     reference = await enroll()
     first = await billing_service.create_ticket(reference, "high bill", "details", "call-1:" + reference)
@@ -139,7 +137,7 @@ async def test_new_account_has_no_bill():
     assert await billing_service.get_bill(await enroll()) is None
 
 
-# ---------------------------------------------------------------- cancellations
+# cancellations
 async def test_cancelling_twice_returns_the_first_reference():
     reference = await enroll()
     first = await cancellation_service.submit_cancellation(reference, "moving")
@@ -164,7 +162,7 @@ async def test_cancelling_marks_the_account_and_sets_the_service_end_date():
     assert status["service_ends_on"] == end_date.isoformat()
 
 
-# ---------------------------------------------------------------- account changes
+# account changes
 async def test_account_update_changes_the_account_and_writes_an_audit_row():
     reference = await enroll()
     await account_service.update_account(reference, "email", {"email": "new@example.com"})
@@ -198,7 +196,7 @@ async def test_only_known_columns_can_be_written():
         await account_service.update_account(reference, "enrollment_status", {"enrollment_status": "free"})
 
 
-# ---------------------------------------------------------------- the database itself
+# the database itself
 async def test_every_table_and_index_the_agent_needs_exists():
     pool = await get_pool()
     tables = {r["table_name"] for r in await pool.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")}

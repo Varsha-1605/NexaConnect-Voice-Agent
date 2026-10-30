@@ -15,7 +15,7 @@ async def main() -> None:
     with open(SCHEMA_PATH, encoding="utf-8") as f:
         schema = f.read()
 
-    # Tables are created with the owner connection; the agent's own role cannot change tables.
+    # tables need the owner connection
     admin_url = os.environ.get("ADMIN_DATABASE_URL")
     if not admin_url:
         raise SystemExit("ADMIN_DATABASE_URL is not set in .env (the owner connection string)")

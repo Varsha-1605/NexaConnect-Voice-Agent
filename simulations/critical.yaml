@@ -1,9 +1,7 @@
 id: SCNG_critical0001
 name: NexaConnect critical scenarios (must pass 100 % before every deploy)
 
-# Each scenario tests one thing. The agent runs against an in-memory backend that starts from
-# `userdata` (see simulation_support.py); `expected_state` is checked when the call ends.
-# Dates are never written here: the agent knows today's date, and callers take what it offers.
+# in-memory backend starts from `userdata`; `expected_state` is checked at the end
 
 scenarios:
   - id: SCN_c03notserved

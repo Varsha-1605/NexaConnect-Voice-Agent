@@ -21,8 +21,6 @@ def _confirmation(reference: str, installation_date: str | None) -> str:
 
 
 class EnrollmentWorkflow(WorkflowTask):
-    """New service enrollment. Spec: docs/enrollment_workflow.md."""
-
     prompt_file = "enrollment_prompt.md"
     opening = "Happy to help! Would you like to check if we serve your area, or enroll in a plan today?"
     shared_tools = [validate_customer_details, search_knowledge_base]
@@ -136,11 +134,11 @@ class EnrollmentWorkflow(WorkflowTask):
                 "the enrollment was not submitted and offer a team member."
             ) from e
 
-        # Set only after a real save, so an availability check alone doesn't block a sign-up.
+        # set after a real save, not after an availability check
         context.userdata.enrollment_completed = True
         logger.info("Enrollment %s saved", reference, extra={"event": "enrollment_saved"})
 
-        # Not awaited (it would deadlock inside this speech); returning None skips the model's reply.
+        # not awaited: would deadlock; None skips the model reply
         speech = context.session.say(
             _confirmation(reference, details.get("preferred_installation_date")),
             allow_interruptions=False,

@@ -1,5 +1,3 @@
-"""Stand-ins for what LiveKit gives a tool when it runs, so tools can be called directly."""
-
 import pytest
 
 from workflows import CallState
@@ -22,8 +20,6 @@ class FakeSession:
 
 
 class FakeContext:
-    """What a tool receives as `context`: the call state and the session."""
-
     def __init__(self, **state):
         self.userdata = CallState(**state)
         self.events = []  # ("save", ...) and ("say", ...) in the order they happened

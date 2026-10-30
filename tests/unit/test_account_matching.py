@@ -1,5 +1,3 @@
-"""Address matching and the lockout, with the database mocked."""
-
 import pytest
 
 from services import account_service
@@ -14,8 +12,6 @@ def rows_for(*stored_addresses):
 
 @pytest.fixture
 def stored(monkeypatch):
-    """Set the addresses the 'database' returns for the name/email/phone match."""
-
     def set_rows(*addresses):
         async def fake_read_rows(query, *args):
             return rows_for(*addresses)

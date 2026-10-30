@@ -1,13 +1,3 @@
-"""Does the right FAQ answer come back in the top 3 results?
-
-Uses the real Pinecone index and OpenAI embeddings, in the `test` namespace:
-
-    uv run python -m kb.ingest --namespace test
-    uv run pytest tests/retrieval
-
-The test fails if fewer than 95 % of the questions find their answer in the top 3.
-"""
-
 import os
 from pathlib import Path
 
@@ -33,8 +23,7 @@ async def found(item) -> bool:
 
 @needs_keys
 async def test_recall_at_3(monkeypatch):
-    # This test measures relevance, not speed, so the time limit is relaxed. It connects the way
-    # the agent does at the start of a call; without it every search opens a new connection.
+    # relaxed time limit: this measures relevance, not speed
     monkeypatch.setattr(knowledge_base, "SEARCH_TIMEOUT", 30.0)
     knowledge_base.share_ssl_context()
     knowledge_base.prepare_vector_store(timeout=30.0)

@@ -1,5 +1,5 @@
-# How customers actually ask, and the FAQ question whose answer must come back in the top 3 results.
-# Add 3-5 questions for every new document. `expect` is the exact FAQ question (without "Q: ").
+# customer phrasings and the FAQ question that must be in the top 3
+# `expect` = exact FAQ question, without "Q: "
 - ask: what internet plans do you have
   expect: What internet plans does NexaConnect offer?
 - ask: how many plans are there and what speeds

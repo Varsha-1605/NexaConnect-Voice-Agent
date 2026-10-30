@@ -1,9 +1,7 @@
 id: SCNG_tofix00000001
 name: NexaConnect scenarios that still fail (to fix, not part of the deploy check)
 
-# These 7 scenarios failed in the first simulation run (6 of 13 passed). They are kept here so the work
-# is not lost. Fix the agent or the scenario, then move each one back to critical.yaml.
-# Problems are listed in PRODUCTION_PLAN.md, section 2.1.
+# failed in the first run; fix, then move back to critical.yaml (see PRODUCTION_PLAN.md)
 
 scenarios:
   - id: SCN_c01enrollnew

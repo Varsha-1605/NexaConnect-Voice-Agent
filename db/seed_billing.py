@@ -14,13 +14,11 @@ SCENARIOS = ("normal", "high", "unpaid", "pending")
 
 
 def faq_router_rental() -> float:
-    """Monthly router rental, from the FAQ."""
     with open(availability.FAQ_PATH, encoding="utf-8") as f:
         return float(re.search(r"Router rental is optional and costs \$(\d+(?:\.\d+)?)", f.read()).group(1))
 
 
 def faq_installation_fee(plan_name: str) -> float:
-    """Installation fee listed for the plan in the FAQ's 'How much does <plan> cost' answer."""
     with open(availability.FAQ_PATH, encoding="utf-8") as f:
         match = re.search(
             rf"### Q: How much does {re.escape(plan_name)} cost per month\?.*?"
@@ -46,7 +44,7 @@ async def main(reference: str, scenario: str) -> None:
     items = [{"description": f"{plan} plan", "amount": availability.plan_prices()[plan]}]
     if account["router_rental_selected"]:
         items.append({"description": "Router rental", "amount": faq_router_rental()})
-    # The FAQ lists no taxes or other fees, so the bill has none. `high` adds the installation fee.
+    # no taxes or fees in the FAQ; `high` adds installation
     if scenario == "high" and faq_installation_fee(plan) > 0:
         items.append({"description": "Technician installation fee", "amount": faq_installation_fee(plan)})
     total = round(sum(i["amount"] for i in items), 2)

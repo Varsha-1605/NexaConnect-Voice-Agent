@@ -1,14 +1,3 @@
-"""Run simulations on the test worker.
-
-    uv run python simulations/run.py critical          # text, 3 samples each, must all pass
-    uv run python simulations/run.py critical --samples 1
-    uv run python simulations/run.py canary --live      # the deployed agent, same 3 scenarios
-
-The local run uses the test worker settings: agent name `nexaconnect-ashley-test`, the Pinecone `test`
-namespace. The simulated database is in memory, so no database is touched. Needs the LiveKit CLI
-(`lk`) signed in to the project.
-"""
-
 import argparse
 import os
 import subprocess

@@ -1,5 +1,3 @@
-"""RAG retrieval: semantic search over the Pinecone index with LangChain."""
-
 import asyncio
 import logging
 import re
@@ -30,8 +28,7 @@ UNAVAILABLE = (
     "at the moment and offer a team member. Do not answer from memory."
 )
 
-# Embedded in prewarm so common questions skip the OpenAI round trip.
-# Includes the phrasings the model actually used in console calls.
+# embedded in prewarm to skip the OpenAI call
 COMMON_QUERIES = [
     "best plan for working from home",
     "best plan for streaming",
@@ -66,7 +63,6 @@ def index_name() -> str:
 
 
 def namespace() -> str:
-    """'production' for the deployed agent, 'test' for the test worker and CI."""
     return PINECONE_NAMESPACE
 
 
@@ -77,13 +73,10 @@ def embeddings() -> OpenAIEmbeddings:
 
 @lru_cache(maxsize=1)
 def vector_store() -> PineconeVectorStore:
-    """Built once per process in prewarm: it looks up the index host with a blocking call."""
     return PineconeVectorStore(index_name=index_name(), embedding=embeddings(), namespace=namespace())
 
 
 def prepare_vector_store(timeout: float = PREWARM_KB_TIMEOUT) -> None:
-    """Build the vector store in prewarm without letting a slow Pinecone hang the process.
-    If it isn't ready in time, it is built at call start instead."""
     thread = threading.Thread(target=vector_store, daemon=True)
     thread.start()
     thread.join(timeout)
@@ -92,10 +85,6 @@ def prepare_vector_store(timeout: float = PREWARM_KB_TIMEOUT) -> None:
 
 
 def share_ssl_context() -> None:
-    """Build Pinecone's CA-bundle SSL context in prewarm so connect() doesn't block the loop for ~1 s.
-
-    Pinecone calls ssl.create_default_context(cafile=...) with no way to pass a context in.
-    """
     original = ssl.create_default_context
     shared = lru_cache(maxsize=None)(lambda cafile: original(cafile=cafile))
 
@@ -151,7 +140,6 @@ async def _embed_query(query: str) -> list[float]:
 
 
 async def search(query: str, k: int = SEARCH_RESULTS) -> list[dict]:
-    """Top k chunks for the query. Raises on errors or after SEARCH_TIMEOUT."""
     global _last_search_at
     _last_search_at = time.monotonic()
 
@@ -163,8 +151,6 @@ async def search(query: str, k: int = SEARCH_RESULTS) -> list[dict]:
 
 
 async def search_or_unavailable(query: str) -> list[dict] | str:
-    """For tools: the results, or a message telling the agent the knowledge base is down.
-    The agent then says it can't check right now instead of guessing."""
     try:
         return await search(query) or "No relevant information found."
     except Exception as e:

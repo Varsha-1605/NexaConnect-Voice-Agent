@@ -117,7 +117,7 @@
     transition: transform 90ms linear, filter 300ms, box-shadow 300ms;
     box-shadow: 0 0 0 4px var(--surface), 0 0 0 7px var(--ring-color), 0 12px 28px var(--orb-glow);
   }
-  /* Slightly enlarged so the border of the source image falls outside the circle. */
+  /* enlarged so the image border falls outside the circle */
   .core img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.08); }
   .name-pill {
     position: absolute;
@@ -355,7 +355,7 @@
 </div>
 
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
-<!-- Pinned version with an integrity hash: if the file on the CDN ever changes, the browser refuses to run it. -->
+<!-- pinned version with an integrity hash -->
 <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.15.4/dist/livekit-client.umd.min.js"
         integrity="sha384-FM0bMGDAUKM/Fm1xvvk2Nu1bWUPLitf9dAWa4re//2IjRwSTLWbFrZpKwjQuUg38" crossorigin="anonymous"></script>
 <script>
@@ -366,12 +366,9 @@ const orb = $("orb"), stateEl = $("state"), timerEl = $("timer");
 const chat = $("chat"), typing = $("typing");
 const toggle = $("toggle"), muteBtn = $("mute"), slash = $("slash");
 
-// Cloudflare Turnstile proves the visitor is a person before the server hands out a call token.
-// This is Cloudflare's test key (it always passes) so the page works on your own computer. The real
-// site key replaces it before deploy; a real server rejects tokens made with the test key.
+// test key always passes; the deploy replaces it
 const TURNSTILE_SITE_KEY = "0x4AAAAAAFsfNJNhrZslJYH5";
-// Where the page asks for a call token. "/api/token" works when the page and the Lambda share one address
-// (local server, CloudFront). On Cloudflare Pages use the full Lambda address, ending in /api/token.
+// token endpoint: /api/token locally, the full Lambda address on Pages
 const TOKEN_API_URL = "https://mrplr3daom4ksaeskokshxckra0ygoba.lambda-url.ap-southeast-2.on.aws/api/token";
 let checkToken = null, checkWidget = null, checkTries = 0;
 
@@ -417,7 +414,7 @@ let level = 0;
 let startedAt = 0;
 let timerId = 0;
 let localTurns = 0;
-// Dropped-call handling: who ended the call, and a message to show when it ends.
+// who ended the call, and the message to show
 const NO_AGENT_SECONDS = 15;
 let endedByUser = false;
 let agentJoined = false;
@@ -470,8 +467,7 @@ function bubbleFor(segmentId, sender) {
 }
 
 // ref-start
-// The agent speaks a reference letter by letter ("E, N, R, two zero two six ..., M, nine, ...").
-// Show it as the real code (ENR-20261030-M93ZT5) instead.
+// the agent spells a reference out; show it as the real code
 const DIGIT_WORDS = "zero one two three four five six seven eight nine".split(" ");
 const DIGIT = DIGIT_WORDS.join("|");
 const SPOKEN_REFERENCE = new RegExp(
@@ -489,7 +485,7 @@ function spokenToCode(prefix, date, code) {
   ].join("-");
 }
 
-// Fill an element with text, turning any spoken reference into a highlighted code.
+// fill an element with text, highlighting references
 function renderText(element, text) {
   element.replaceChildren();
   let last = 0;
@@ -505,8 +501,7 @@ function renderText(element, text) {
 }
 // ref-end
 
-// The assistant's turn is one stream of chunks to append. The customer's speech is re-sent as a
-// new stream with the full text so far, so each stream replaces what the bubble showed.
+// assistant: stream of chunks to append; customer: full text re-sent, replaces the bubble
 async function onTranscription(reader, participantInfo) {
   const sender = participantInfo.identity === room.localParticipant.identity ? "customer" : "assistant";
   const bubble = bubbleFor(reader.info.attributes["lk.segment_id"] ?? reader.info.id, sender);
@@ -537,7 +532,7 @@ async function onReference(reader) {
   addToChat(card);
 }
 
-// Loudness (0..1) of an audio track, read from the browser's own audio graph.
+// loudness (0..1) of an audio track
 function makeMeter(mediaStreamTrack) {
   const analyser = audioCtx.createAnalyser();
   analyser.fftSize = 512;
@@ -564,7 +559,7 @@ function applyAgentState(value) {
   if (LABELS[agentState]) setState(agentState);
 }
 
-// End the call and show `text` instead of "Session ended".
+// end the call and show `text`
 function endWithMessage(text) {
   endMessage = text;
   room?.disconnect();
@@ -632,7 +627,7 @@ async function start() {
     room.on(RoomEvent.ParticipantAttributesChanged, (changed, p) => {
       if (p.kind === ParticipantKind.AGENT && "lk.agent.state" in changed) applyAgentState(changed["lk.agent.state"]);
     });
-    // A normal hang-up by Ashley deletes the room. If she leaves and the room stays, she dropped.
+    // Ashley hanging up deletes the room; if the room stays, she dropped
     room.on(RoomEvent.ParticipantDisconnected, (p) => {
       if (p.kind !== ParticipantKind.AGENT) return;
       setTimeout(() => {
@@ -675,7 +670,7 @@ function onEnded(reason) {
   orb.style.setProperty("--level", 0);
   setState("ended");
   setConnectedUi(false);
-  // Ending normally: the customer clicked End, or Ashley hung up (which deletes the room).
+  // normal end: customer clicked End or Ashley hung up
   const normal = endedByUser || reason === DisconnectReason.ROOM_DELETED;
   const message = endMessage || (normal ? "" : "The call was disconnected. Please call again.");
   if (message) stateEl.textContent = message;

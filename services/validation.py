@@ -1,5 +1,3 @@
-"""Validation for customer and enrollment details. Only fields passed in are checked."""
-
 import re
 from datetime import date, timedelta
 
@@ -20,7 +18,6 @@ def validate(
     plan_name: str | None = None,
     preferred_installation_date: str | None = None,
 ) -> dict:
-    """Return {"valid": bool, "errors": {field: message}, "normalized": {field: value}}."""
     errors: dict[str, str] = {}
     normalized: dict[str, str] = {}
 

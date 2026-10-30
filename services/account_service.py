@@ -7,13 +7,13 @@ from services import availability, validation
 
 CANCELLED_STATUS = "cancellation_requested"
 
-# The only columns `update_account` may write; keys of `changes` are checked against it.
+# only columns update_account may write
 UPDATABLE_COLUMNS = {
     "customer_name", "phone_number", "email", "service_address", "city", "state",
     "postal_code", "plan_name", "monthly_plan_price",
 }
 
-# Spoken and stored addresses differ in suffixes ("Street" vs "St"), so both are shortened.
+# street suffixes shortened on both sides
 _ADDRESS_WORDS = {
     "street": "st", "avenue": "ave", "road": "rd", "drive": "dr", "boulevard": "blvd",
     "lane": "ln", "court": "ct", "apartment": "apt", "suite": "ste",
@@ -32,10 +32,6 @@ async def find_account(
     email: str | None = None,
     phone_number: str | None = None,
 ) -> str | None:
-    """Return the enrollment reference matching the name, address and (email or phone), else None.
-
-    Prefers an account that is not already cancelled.
-    """
     phone = validation.validate(phone_number=phone_number)["normalized"].get("phone_number")
     rows = await read_rows(
         """
@@ -52,20 +48,17 @@ async def find_account(
     spoken = _normalize_address(service_address)
     for row in rows:
         stored = _normalize_address(row["service_address"])
-        # Exact match. The caller may add the city after the street ("21 jane st new york"),
-        # but "12 main st" must never match "112 main st".
+        # exact match, or street followed by city
         if spoken == stored or spoken.startswith(stored + " "):
             return row["enrollment_reference"]
     return None
 
 
 def _address_hash(service_address: str) -> str:
-    """Failed attempts are stored by hash, so no raw address is kept for them."""
     return hashlib.sha256(_normalize_address(service_address).encode()).hexdigest()
 
 
 async def verification_locked(service_address: str) -> bool:
-    """True if this address had too many failed verifications in the last LOCKOUT_HOURS."""
     failures = await read_value(
         """
         SELECT count(*) FROM verification_failures
@@ -159,10 +152,6 @@ def validate_change(
     state: str | None = None,
     postal_code: str | None = None,
 ) -> dict:
-    """Check one requested change against the account. Returns {valid, errors, changes}.
-
-    `changes` holds the column values that `update_account` would write.
-    """
     if account["status"] == CANCELLED_STATUS:
         return _invalid(**{field: "This account has a cancellation request, so it can't be changed."})
     if field == "plan_name":
@@ -183,7 +172,6 @@ def _describe(field: str, values) -> str:
 
 
 async def update_account(enrollment_reference: str, field: str, changes: dict) -> None:
-    """Save the validated `changes` for one field and record the change, in one transaction."""
     if not changes or not set(changes) <= UPDATABLE_COLUMNS:
         raise ValueError("unsupported columns")
     assignments = ", ".join(f"{column} = ${i}" for i, column in enumerate(changes, start=2))

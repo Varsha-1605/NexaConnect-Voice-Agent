@@ -1,5 +1,3 @@
-"""The enrollment submit tool: consent, checks, and that 'You're enrolled' only follows a real save."""
-
 import pytest
 from livekit.agents import ToolError
 from livekit.agents.llm import ChatContext
@@ -31,7 +29,6 @@ async def workflow():
 
 @pytest.fixture
 def saves(monkeypatch, context):
-    """Replace the database save. Records each save, in order with the spoken lines."""
     keys = []
 
     async def fake_save(**fields):
