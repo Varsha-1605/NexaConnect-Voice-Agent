@@ -13,7 +13,6 @@ Sign-ups, account updates, billing questions and cancellations, by phone or in t
 
 [Overview](#overview) · [Features](#features) · [Tech stack](#tech-stack) · [Architecture](#architecture) · [Latency](#latency) · [Testing](#testing-and-evaluation) · [Getting started](#getting-started) · [Deployment](#deployment) · [API](#api)
 
-</div>
 
 > [!NOTE]
 > Live demo: **<https://nexaconnect-web.pages.dev>**. Click **Start session**, allow the microphone and talk to Ashley.
