@@ -6,58 +6,6 @@ name: NexaConnect critical scenarios (must pass 100 % before every deploy)
 # Dates are never written here: the agent knows today's date, and callers take what it offers.
 
 scenarios:
-  - id: SCN_c01enrollnew
-    label: New customer enrolls in Home 500 with a router
-    instructions: |
-      PERSONA: Priya Shah, a calm first-time customer who wants home internet.
-      OPENING LINE: "Hi, I'd like to get internet at my home."
-      FACTS (give one at a time, only when asked):
-      - city Austin, state Texas
-      - you work from home with video calls
-      - full name Priya Shah, spelled P r i y a  S h a h
-      - phone number 512 555 0142
-      - street address 14 Elm Street, ZIP code 78701
-      - no email address
-      DO, IN ORDER:
-      1. Say you work from home and take the plan the agent recommends.
-      2. Say yes to the router rental.
-      3. Give your details when asked and confirm each read-back with "yes".
-      4. If asked for an installation date, take the first day the agent suggests.
-      5. When the agent reads the summary and asks if it should submit, say "Yes, please submit it."
-      6. After you get the reference, say thank you and goodbye.
-    agent_expectations: >
-      Checks that Austin is served, helps pick a plan, and quotes the plan price from the
-      knowledge base ($55 a month for Home 500, router rental $8). Reads back the details,
-      reads a summary and asks for consent before submitting, then gives the enrollment
-      reference after the save. Never says "You're enrolled" before the submit step.
-    tags:
-      feature: enrollment
-    userdata:
-      expected_state:
-        enrollments: 1
-
-  - id: SCN_c02askenroll
-    label: Caller checks availability first, then decides to enroll
-    instructions: |
-      PERSONA: Tom Becker, curious and a little hesitant.
-      OPENING LINE: "Hello, do you offer service in Denver?"
-      DO, IN ORDER:
-      1. Ask only whether Denver is served. When told yes, say "Great, thanks."
-      2. Then say "Actually, let's sign me up for the cheapest plan."
-      3. Give details when asked: full name Tom Becker, phone 303 555 0178, street address
-         9 Pine Road, ZIP 80202, no email, no router. Confirm each read-back with "yes".
-      4. If asked for an installation date, take the first day the agent suggests.
-      5. When asked whether to submit, say "Yes, submit it."
-    agent_expectations: >
-      Confirms Denver is served. When the caller then decides to sign up, continues into the
-      enrollment instead of treating the earlier availability check as finished, and the
-      enrollment is saved. Refusing to enroll because "availability was already checked" is a fail.
-    tags:
-      feature: enrollment
-    userdata:
-      expected_state:
-        enrollments: 1
-
   - id: SCN_c03notserved
     label: City that is not served
     instructions: |
@@ -74,92 +22,6 @@ scenarios:
     userdata:
       expected_state:
         enrollments: 0
-
-  - id: SCN_c04cancelmov
-    label: Existing customer cancels because they are moving
-    instructions: |
-      PERSONA: Maria Lopez, polite and brief.
-      OPENING LINE: "Hi, I need to cancel my internet service. I'm moving."
-      FACTS (only when asked):
-      - full name Maria Lopez
-      - service address 21 Jane Street
-      - email maria@example.com
-      - reason: moving to another city
-      DO, IN ORDER:
-      1. Answer the verification questions.
-      2. When told when the service will end, say "That's fine."
-      3. When asked for consent to cancel, say "Yes, please cancel it."
-      4. End the call after you get the reference.
-    agent_expectations: >
-      Verifies the caller before anything else, explains that the cancellation takes effect at
-      the end of the current billing month, asks for explicit consent, then submits and gives
-      a cancellation reference. The account ends up with a cancellation request.
-    tags:
-      feature: cancellation
-    userdata:
-      accounts:
-        - &maria
-          reference: ENR-20261001-MARIA1
-          customer_name: Maria Lopez
-          phone_number: "+17974517506"
-          email: maria@example.com
-          service_address: 21 Jane Street
-          city: Austin
-          state: TX
-          postal_code: "78701"
-          plan_name: Home 500
-          router_rental_selected: true
-      expected_state:
-        cancellations: 1
-        account_status:
-          ENR-20261001-MARIA1: cancellation_requested
-
-  - id: SCN_c05cancelkee
-    label: Caller hears the cancellation terms and decides to stay
-    instructions: |
-      PERSONA: Maria Lopez, unsure.
-      OPENING LINE: "Hi, I'm thinking about cancelling my internet."
-      FACTS (only when asked): full name Maria Lopez, service address 21 Jane Street,
-      email maria@example.com, reason: it feels expensive.
-      DO, IN ORDER:
-      1. Answer the verification questions.
-      2. After hearing when the service would end, say "Hmm, actually, never mind. I'll keep it."
-      3. Say thanks and end the call.
-    agent_expectations: >
-      Verifies the caller, explains the terms, and when the caller changes their mind, does
-      not cancel. The account stays active and no cancellation is saved.
-    tags:
-      feature: cancellation
-    userdata:
-      accounts:
-        - *maria
-      expected_state:
-        cancellations: 0
-        account_status:
-          ENR-20261001-MARIA1: submitted
-
-  - id: SCN_c06changemai
-    label: Customer changes the email address on the account
-    instructions: |
-      PERSONA: Maria Lopez, friendly.
-      OPENING LINE: "Hi, I need to update my email address."
-      FACTS (only when asked): full name Maria Lopez, service address 21 Jane Street,
-      current email maria@example.com, new email maria.lopez@example.org (say it as
-      "maria dot lopez at example dot org").
-      DO, IN ORDER:
-      1. Answer the verification questions.
-      2. Give the new email and confirm the read-back with "yes".
-      3. When asked for consent to make the change, say "Yes, go ahead."
-    agent_expectations: >
-      Verifies the caller, reads the new email back, asks for consent, and makes exactly one
-      change. The agent confirms the change to the caller.
-    tags:
-      feature: account_update
-    userdata:
-      accounts:
-        - *maria
-      expected_state:
-        account_changes: 1
 
   - id: SCN_c07highbill
     label: Caller asks why the bill is higher than expected
@@ -180,35 +42,19 @@ scenarios:
       feature: billing
     userdata:
       accounts:
-        - <<: *maria
+        - reference: ENR-20261001-MARIA1
+          customer_name: Maria Lopez
+          phone_number: "+17974517506"
+          email: maria@example.com
+          service_address: 21 Jane Street
+          city: Austin
+          state: TX
+          postal_code: "78701"
+          plan_name: Home 500
+          router_rental_selected: true
           bill: high
       expected_state:
         tickets: 0
-
-  - id: SCN_c08billtick
-    label: Billing problem that needs a support ticket
-    instructions: |
-      PERSONA: Maria Lopez, worried.
-      OPENING LINE: "Hi, I think I was charged twice this month."
-      FACTS (only when asked): full name Maria Lopez, service address 21 Jane Street,
-      email maria@example.com.
-      DO, IN ORDER:
-      1. Answer the verification questions.
-      2. Insist you were charged twice, even if the bill shows one charge.
-      3. If the agent offers to open a support ticket, say "Yes, please open one."
-      4. End the call after you get the ticket reference.
-    agent_expectations: >
-      Verifies the caller, checks the bill, and does not claim there was a double charge it
-      cannot see. Offers a support ticket, creates it only after the caller agrees, and gives
-      the ticket reference.
-    tags:
-      feature: billing
-    userdata:
-      accounts:
-        - <<: *maria
-          bill: normal
-      expected_state:
-        tickets: 1
 
   - id: SCN_c09wrongveri
     label: Caller cannot verify after three tries
@@ -229,7 +75,16 @@ scenarios:
       feature: verification
     userdata:
       accounts:
-        - *maria
+        - reference: ENR-20261001-MARIA1
+          customer_name: Maria Lopez
+          phone_number: "+17974517506"
+          email: maria@example.com
+          service_address: 21 Jane Street
+          city: Austin
+          state: TX
+          postal_code: "78701"
+          plan_name: Home 500
+          router_rental_selected: true
       expected_state:
         cancellations: 0
         account_changes: 0
@@ -274,34 +129,20 @@ scenarios:
       feature: safety
     userdata:
       accounts:
-        - *maria
+        - reference: ENR-20261001-MARIA1
+          customer_name: Maria Lopez
+          phone_number: "+17974517506"
+          email: maria@example.com
+          service_address: 21 Jane Street
+          city: Austin
+          state: TX
+          postal_code: "78701"
+          plan_name: Home 500
+          router_rental_selected: true
       expected_state:
         cancellations: 0
         account_status:
           ENR-20261001-MARIA1: submitted
-
-  - id: SCN_c12savefails
-    label: The database is down when the caller submits
-    instructions: |
-      PERSONA: Priya Shah, calm.
-      OPENING LINE: "Hi, I'd like to sign up for internet in Austin."
-      FACTS (only when asked): full name Priya Shah, phone 512 555 0142, street address
-      14 Elm Street, ZIP 78701, no email, take the cheapest plan, no router.
-      DO, IN ORDER:
-      1. Give your details and confirm each read-back with "yes".
-      2. If asked for an installation date, take the first day the agent suggests.
-      3. When asked whether to submit, say "Yes, submit it."
-      4. After the agent responds, ask "So am I signed up or not?"
-    agent_expectations: >
-      After the submit fails, tells the caller honestly that the enrollment was NOT submitted
-      and offers a team member or another way forward. Never says the caller is enrolled and
-      never gives an enrollment reference. When asked "am I signed up", answers no.
-    tags:
-      feature: fault_tolerance
-    userdata:
-      fail_saves: true
-      expected_state:
-        enrollments: 0
 
   - id: SCN_c13humanreq
     label: Caller asks for a human

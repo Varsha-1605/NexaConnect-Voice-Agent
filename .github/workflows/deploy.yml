@@ -1,0 +1,164 @@
+name: NexaConnect Test and Deploy
+
+# Pull request: run the tests only.
+# Push to main: run the tests, then deploy only the parts that changed.
+# "Run workflow" button: deploy all three parts.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  UV_PYTHON: "3.13"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Dummy values so imports work. The unit tests never call these services.
+      OPENAI_API_KEY: test-key
+      PINECONE_API_KEY: test-key
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setting Up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Setting Up Python
+        run: uv python install 3.13
+
+      - name: Install Dependencies
+        run: uv sync --locked
+
+      # Only the unit tests: the other tests need real databases and API keys.
+      - name: Run Tests
+        run: uv run pytest tests/unit -v -p no:faulthandler
+
+      # Check that the agent image still builds. Nothing is pushed: LiveKit builds its own copy.
+      - name: Build Docker Image
+        run: docker build -t nexaconnect-agent .
+
+  changes:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      agent: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.agent == 'true' }}
+      lambda: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.lambda == 'true' }}
+      page: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.page == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            agent:
+              - 'agent.py'
+              - 'config.py'
+              - 'utils.py'
+              - 'voice_models.py'
+              - 'simulation_support.py'
+              - 'services/**'
+              - 'workflows/**'
+              - 'prompts/**'
+              - 'db/**'
+              - 'Dockerfile'
+              - 'pyproject.toml'
+              - 'uv.lock'
+            lambda:
+              - 'token_api/handler.py'
+            page:
+              - 'web/index.html'
+              - 'web/static/**'
+
+  deploy-agent:
+    needs: changes
+    if: needs.changes.outputs.agent == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+      LIVEKIT_API_KEY: ${{ secrets.LIVEKIT_API_KEY }}
+      LIVEKIT_API_SECRET: ${{ secrets.LIVEKIT_API_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the LiveKit CLI
+        run: curl -sSL https://get.livekit.io/cli | bash
+
+      # The agent's own secrets (OpenAI, Pinecone, database) are already stored in LiveKit
+      # from the first deploy, so they are not needed here.
+      - name: Deploy the agent
+        run: lk agent deploy
+
+      - name: Check the agent
+        run: lk agent status
+
+  deploy-lambda:
+    needs: changes
+    if: needs.changes.outputs.lambda == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+
+      - name: Upload the function
+        run: |
+          cd token_api
+          zip ../token_api.zip handler.py
+          cd ..
+          aws lambda update-function-code \
+            --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}" \
+            --zip-file fileb://token_api.zip
+          aws lambda wait function-updated --function-name "${{ vars.LAMBDA_FUNCTION_NAME }}"
+
+      # An empty request must be refused with "missing check".
+      - name: Test the function
+        run: |
+          reply=$(curl -s -X POST -d '{}' "${{ vars.TOKEN_API_URL }}")
+          echo "$reply"
+          echo "$reply" | grep -q '"missing check"'
+
+  deploy-page:
+    needs: changes
+    if: needs.changes.outputs.page == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      # The page in the repo keeps the local settings. The live settings are put in here.
+      - name: Build the page with the live settings
+        run: |
+          mkdir dist
+          cp web/index.html dist/
+          cp -r web/static dist/static
+          sed -i 's|const TOKEN_API_URL = "[^"]*";|const TOKEN_API_URL = "${{ vars.TOKEN_API_URL }}";|' dist/index.html
+          sed -i 's|const TURNSTILE_SITE_KEY = "[^"]*";|const TURNSTILE_SITE_KEY = "${{ vars.TURNSTILE_SITE_KEY }}";|' dist/index.html
+          grep -q 'const TOKEN_API_URL = "${{ vars.TOKEN_API_URL }}";' dist/index.html
+          grep -q 'const TURNSTILE_SITE_KEY = "${{ vars.TURNSTILE_SITE_KEY }}";' dist/index.html
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=nexaconnect-web --branch=main
