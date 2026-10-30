@@ -1,0 +1,21 @@
+# Secrets: never in the image
+.env
+.env.*
+*.secrets.env
+
+# Not needed to run the agent
+.venv/
+__pycache__/
+**/__pycache__/
+.ruff_cache/
+.pytest_cache/
+.git/
+.claude/
+tests/
+simulations/
+docs/
+web/
+token_api/
+kb/
+/*.md
+simulation_support.py.bak

@@ -237,7 +237,6 @@ def prewarm(proc: agents.JobProcess):
 
     # Otherwise imported lazily on the first LLM call, blocking the event loop.
     import anyio._backends._asyncio  # noqa: F401
-    import unittest.mock  # noqa: F401  (console mode's mock room imports it on the first job)
     import openai.lib.streaming.chat as _openai_streaming  # noqa: F401
 
     # Reused by every session so its HTTP/SSL setup isn't on the call path.
