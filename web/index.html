@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NexaConnect Support</title>
+<style>
+  :root {
+    --bg: #f3f6fa;
+    --surface: #ffffff;
+    --surface-2: #f6f8fb;
+    --text: #14202e;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --brand: #0d9488;
+    --brand-2: #2563eb;
+    --brand-soft: #e6f6f4;
+    --assistant: #eef2f7;
+    --customer: linear-gradient(135deg, #0d9488, #2563eb);
+    --danger: #dc2626;
+    --shadow: 0 10px 30px rgba(20, 32, 46, 0.08);
+    --orb-glow: rgba(13, 148, 136, 0.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0c1118;
+      --surface: #131a23;
+      --surface-2: #18212c;
+      --text: #e8edf3;
+      --muted: #94a3b8;
+      --border: #243040;
+      --brand: #2dd4bf;
+      --brand-2: #60a5fa;
+      --brand-soft: #12302e;
+      --assistant: #1c2733;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      --orb-glow: rgba(45, 212, 191, 0.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+  }
+  .app {
+    width: 100%;
+    max-width: 1080px;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 16px;
+    height: calc(100vh - 32px);
+    min-height: 560px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+  }
+
+  /* Hero panel */
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 20px;
+    gap: 18px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; align-self: flex-start; }
+  .brand svg { width: 34px; height: 34px; }
+  .brand b { font-size: 1.1rem; letter-spacing: -0.01em; }
+  .brand span { display: block; font-size: 0.75rem; color: var(--muted); margin-top: -2px; }
+
+  .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+  .orb {
+    --level: 0;
+    --ring-color: var(--brand);
+    position: relative;
+    width: 214px;
+    height: 214px;
+    display: grid;
+    place-items: center;
+    margin-bottom: 10px;
+  }
+  .orb[data-state="idle"], .orb[data-state="ended"] { --ring-color: var(--border); }
+  .orb[data-state="thinking"], .orb[data-state="speaking"] { --ring-color: var(--brand-2); }
+  .orb .ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--orb-glow), transparent 68%);
+    transform: scale(calc(1 + var(--level) * 0.55));
+    transition: transform 90ms linear, opacity 300ms;
+    opacity: 0.5;
+  }
+  .avatar { position: relative; width: 150px; height: 150px; }
+  .orb .core {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--customer);
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 3.4rem;
+    font-weight: 700;
+    transform: scale(calc(1 + var(--level) * 0.08));
+    transition: transform 90ms linear, filter 300ms, box-shadow 300ms;
+    box-shadow: 0 0 0 4px var(--surface), 0 0 0 7px var(--ring-color), 0 12px 28px var(--orb-glow);
+  }
+  /* Slightly enlarged so the border of the source image falls outside the circle. */
+  .core img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.08); }
+  .name-pill {
+    position: absolute;
+    left: 50%;
+    bottom: -14px;
+    transform: translateX(-50%);
+    padding: 3px 18px;
+    border-radius: 999px;
+    background: var(--customer);
+    color: #fff;
+    font-weight: 650;
+    font-size: 0.95rem;
+    border: 3px solid var(--surface);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  }
+  .orb[data-state="idle"] .ring, .orb[data-state="ended"] .ring { opacity: 0.15; }
+  .orb[data-state="connecting"] .ring, .orb[data-state="joining"] .ring,
+  .orb[data-state="listening"] .ring { animation: breathe 2.6s ease-in-out infinite; }
+  .orb[data-state="thinking"] .avatar::after {
+    content: "";
+    position: absolute;
+    inset: -15px;
+    border-radius: 50%;
+    border: 3px solid transparent;
+    border-top-color: var(--brand-2);
+    border-right-color: var(--brand);
+    animation: spin 1s linear infinite;
+  }
+  .orb[data-state="speaking"] .ring { opacity: 0.9; }
+  @keyframes breathe { 50% { opacity: 0.85; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .state { color: var(--muted); font-size: 0.95rem; min-height: 1.5em; text-align: center; }
+  .timer { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9rem; min-height: 1.4em; }
+
+  .controls { display: flex; gap: 10px; width: 100%; }
+  button { font: inherit; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--brand-2); outline-offset: 2px; }
+  .btn {
+    flex: 1;
+    border: 0;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-weight: 650;
+    color: #fff;
+    background: var(--customer);
+    transition: transform 120ms, opacity 120ms;
+  }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .btn.end { background: var(--danger); }
+  .btn:disabled { opacity: 0.55; cursor: default; }
+  .mute {
+    width: 48px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface-2);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+  }
+  .mute svg { width: 22px; height: 22px; }
+  .mute[aria-pressed="true"] { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .mute:disabled { opacity: 0.4; cursor: default; }
+
+  /* Conversation panel */
+  .convo { display: flex; flex-direction: column; min-height: 0; }
+  .convo header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 650;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .convo header small { color: var(--muted); font-weight: 400; }
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .empty { margin: auto; color: var(--muted); text-align: center; max-width: 280px; }
+  .turn { max-width: 78%; display: flex; flex-direction: column; gap: 3px; animation: rise 200ms ease-out; }
+  .turn .who { font-size: 0.72rem; color: var(--muted); padding: 0 4px; }
+  .turn .bubble {
+    padding: 9px 14px;
+    border-radius: 16px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .assistant { align-self: flex-start; }
+  .assistant .bubble { background: var(--assistant); border-bottom-left-radius: 5px; }
+  .customer { align-self: flex-end; align-items: flex-end; }
+  .customer .bubble { background: var(--customer); color: #fff; border-bottom-right-radius: 5px; }
+  .bubble code.ref {
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 1px 7px;
+    border-radius: 6px;
+    color: var(--text);
+    background: var(--brand-soft);
+    border: 1px solid var(--brand);
+    white-space: nowrap;
+  }
+  .typing[hidden] { display: none; }
+  .typing .bubble { display: flex; gap: 5px; padding: 13px 16px; }
+  .typing .bubble i {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+    animation: dot 1.2s infinite ease-in-out;
+  }
+  .typing .bubble i:nth-child(2) { animation-delay: 0.15s; }
+  .typing .bubble i:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes dot { 0%, 80%, 100% { opacity: 0.25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+
+  .ref-card {
+    align-self: center;
+    width: min(100%, 420px);
+    background: var(--brand-soft);
+    border: 1px solid var(--brand);
+    border-radius: 14px;
+    padding: 12px 16px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 12px;
+    align-items: center;
+    animation: rise 200ms ease-out;
+  }
+  .ref-card small { color: var(--muted); grid-column: 1 / -1; }
+  .ref-card code { font-size: 1.15rem; font-weight: 700; letter-spacing: 0.03em; }
+  .ref-card button {
+    border: 1px solid var(--brand);
+    background: transparent;
+    color: var(--text);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.85rem;
+  }
+
+  form { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--border); }
+  form input {
+    flex: 1;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    border-radius: 12px;
+    padding: 11px 14px;
+    font: inherit;
+    min-width: 0;
+  }
+  form input:disabled { opacity: 0.6; }
+  form button {
+    border: 0;
+    border-radius: 12px;
+    padding: 0 18px;
+    font-weight: 650;
+    color: #fff;
+    background: var(--customer);
+  }
+  form button:disabled { opacity: 0.5; cursor: default; }
+
+  @media (max-width: 820px) {
+    body { padding: 10px; }
+    .app { grid-template-columns: 1fr; height: auto; min-height: calc(100vh - 20px); }
+    .hero { padding: 18px 16px; }
+    .orb { width: 176px; height: 176px; }
+    .avatar { width: 124px; height: 124px; }
+    .convo { min-height: 420px; }
+    .turn { max-width: 90%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="card hero" aria-label="Call controls">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#0d9488"/><stop offset="1" stop-color="#2563eb"/>
+        </linearGradient></defs>
+        <rect width="40" height="40" rx="11" fill="url(#g)"/>
+        <g fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round">
+          <path d="M11 17a13 13 0 0 1 18 0"/><path d="M15 22a7.5 7.5 0 0 1 10 0"/>
+        </g>
+        <circle cx="20" cy="27" r="2.2" fill="#fff"/>
+      </svg>
+      <div><b>NexaConnect</b><span>Customer support</span></div>
+    </div>
+
+    <div class="stage">
+      <div class="orb" id="orb" data-state="idle">
+        <div class="ring"></div>
+        <div class="avatar">
+          <div class="core">A<img src="/static/ashley.png" alt="Ashley, your NexaConnect support agent" onerror="this.remove()"></div>
+          <div class="name-pill">Ashley</div>
+        </div>
+      </div>
+      <div class="state" id="state" aria-live="polite">Ready when you are</div>
+      <div class="timer" id="timer"></div>
+    </div>
+
+    <div class="controls">
+      <button class="mute" id="mute" aria-pressed="false" aria-label="Mute microphone" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+          <path id="slash" d="M4 4l16 16" hidden/>
+        </svg>
+      </button>
+      <button class="btn" id="toggle">Start session</button>
+    </div>
+  </section>
+
+  <section class="card convo" aria-label="Conversation">
+    <header>Conversation <small id="hint">Speak, or type a message</small></header>
+    <div id="chat" role="log" aria-live="polite">
+      <p class="empty">Your conversation will appear here once you start a session.</p>
+      <div class="turn assistant typing" id="typing" hidden>
+        <div class="bubble" aria-label="Ashley is thinking"><i></i><i></i><i></i></div>
+      </div>
+    </div>
+    <form id="composer" autocomplete="off">
+      <input id="message" type="text" placeholder="Type a message..." aria-label="Type a message" disabled>
+      <button type="submit" id="send" disabled>Send</button>
+    </form>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2.15.4/dist/livekit-client.umd.min.js"></script>
+<script>
+const { Room, RoomEvent, Track, ParticipantKind } = LivekitClient;
+
+const $ = (id) => document.getElementById(id);
+const orb = $("orb"), stateEl = $("state"), timerEl = $("timer");
+const chat = $("chat"), typing = $("typing");
+const toggle = $("toggle"), muteBtn = $("mute"), slash = $("slash");
+const composer = $("composer"), message = $("message"), sendBtn = $("send");
+
+const LABELS = {
+  idle: "Ready when you are",
+  connecting: "Connecting...",
+  joining: "Ashley is joining...",
+  listening: "Listening",
+  thinking: "Thinking...",
+  speaking: "Speaking",
+  ended: "Session ended",
+};
+
+let room = null;
+let audioCtx = null;
+let muted = false;
+let agentState = "joining";
+let meters = { agent: null, mic: null };
+let level = 0;
+let startedAt = 0;
+let timerId = 0;
+let localTurns = 0;
+const bubbles = new Map(); // segment id -> bubble element
+
+function render() {
+  const state = orb.dataset.state;
+  const label = state === "listening" && muted ? "Microphone muted" : LABELS[state];
+  stateEl.textContent = label;
+  typing.hidden = state !== "thinking";
+  if (!typing.hidden) chat.scrollTop = chat.scrollHeight;
+}
+
+function setState(next) {
+  orb.dataset.state = next;
+  render();
+}
+
+function resetChat() {
+  [...chat.children].forEach((el) => el !== typing && el.remove());
+  const empty = document.createElement("p");
+  empty.className = "empty";
+  empty.textContent = "Say hello, or type a message below.";
+  chat.insertBefore(empty, typing);
+  bubbles.clear();
+}
+
+function addToChat(el) {
+  chat.querySelector(".empty")?.remove();
+  chat.insertBefore(el, typing);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function bubbleFor(segmentId, sender) {
+  let bubble = bubbles.get(segmentId);
+  if (bubble) return bubble;
+  const turn = document.createElement("div");
+  turn.className = `turn ${sender}`;
+  const who = document.createElement("div");
+  who.className = "who";
+  who.textContent = sender === "customer" ? "You" : "Ashley";
+  bubble = document.createElement("div");
+  bubble.className = "bubble";
+  turn.append(who, bubble);
+  addToChat(turn);
+  bubbles.set(segmentId, bubble);
+  return bubble;
+}
+
+// ref-start
+// The agent speaks a reference letter by letter ("E, N, R, two zero two six ..., M, nine, ...").
+// Show it as the real code (ENR-20261030-M93ZT5) instead.
+const DIGIT_WORDS = "zero one two three four five six seven eight nine".split(" ");
+const DIGIT = DIGIT_WORDS.join("|");
+const SPOKEN_REFERENCE = new RegExp(
+  `\\b([A-Z](?:, [A-Z]){2}), ((?:${DIGIT})(?: (?:${DIGIT})){7}), ((?:${DIGIT}|[A-Za-z])(?:, (?:${DIGIT}|[A-Za-z])){5})\\b`,
+  "g"
+);
+
+function spokenToCode(prefix, date, code) {
+  const digit = (word) => DIGIT_WORDS.indexOf(word);
+  const part = (word) => (digit(word) >= 0 ? digit(word) : word.toUpperCase());
+  return [
+    prefix.replaceAll(", ", ""),
+    date.split(" ").map(digit).join(""),
+    code.split(", ").map(part).join(""),
+  ].join("-");
+}
+
+// Fill an element with text, turning any spoken reference into a highlighted code.
+function renderText(element, text) {
+  element.replaceChildren();
+  let last = 0;
+  for (const match of text.matchAll(SPOKEN_REFERENCE)) {
+    element.append(text.slice(last, match.index));
+    const code = document.createElement("code");
+    code.className = "ref";
+    code.textContent = spokenToCode(match[1], match[2], match[3]);
+    element.append(code);
+    last = match.index + match[0].length;
+  }
+  element.append(text.slice(last));
+}
+// ref-end
+
+// The assistant's turn is one stream of chunks to append. The customer's speech is re-sent as a
+// new stream with the full text so far, so each stream replaces what the bubble showed.
+async function onTranscription(reader, participantInfo) {
+  const sender = participantInfo.identity === room.localParticipant.identity ? "customer" : "assistant";
+  const bubble = bubbleFor(reader.info.attributes["lk.segment_id"] ?? reader.info.id, sender);
+  let text = "";
+  for await (const chunk of reader) {
+    text += chunk;
+    renderText(bubble, text);
+    chat.scrollTop = chat.scrollHeight;
+  }
+}
+
+async function onReference(reader) {
+  const code = await reader.readAll();
+  const card = document.createElement("div");
+  card.className = "ref-card";
+  const label = document.createElement("small");
+  label.textContent = `${reader.info.attributes.kind ?? "Reference"} reference - keep this for your records`;
+  const codeEl = document.createElement("code");
+  codeEl.textContent = code;
+  const copy = document.createElement("button");
+  copy.textContent = "Copy";
+  copy.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(code);
+    copy.textContent = "Copied";
+    setTimeout(() => (copy.textContent = "Copy"), 1500);
+  });
+  card.append(label, codeEl, copy);
+  addToChat(card);
+}
+
+// Loudness (0..1) of an audio track, read from the browser's own audio graph.
+function makeMeter(mediaStreamTrack) {
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  audioCtx.createMediaStreamSource(new MediaStream([mediaStreamTrack])).connect(analyser);
+  const data = new Uint8Array(analyser.fftSize);
+  return () => {
+    analyser.getByteTimeDomainData(data);
+    let sum = 0;
+    for (const v of data) sum += ((v - 128) / 128) ** 2;
+    return Math.sqrt(sum / data.length);
+  };
+}
+
+function animate() {
+  if (!room) return;
+  const now = Math.max(meters.agent?.() ?? 0, muted ? 0 : meters.mic?.() ?? 0);
+  level = level * 0.7 + Math.min(1, now * 4) * 0.3;
+  orb.style.setProperty("--level", level.toFixed(3));
+  requestAnimationFrame(animate);
+}
+
+function applyAgentState(value) {
+  agentState = value === "initializing" ? "joining" : value;
+  if (LABELS[agentState]) setState(agentState);
+}
+
+function startTimer() {
+  startedAt = Date.now();
+  timerId = setInterval(() => {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  }, 1000);
+}
+
+function setConnectedUi(connected) {
+  toggle.textContent = connected ? "End session" : "Start session";
+  toggle.classList.toggle("end", connected);
+  for (const el of [muteBtn, message, sendBtn]) el.disabled = !connected;
+}
+
+async function start() {
+  toggle.disabled = true;
+  resetChat();
+  timerEl.textContent = "";
+  muted = false;
+  muteBtn.setAttribute("aria-pressed", "false");
+  slash.hidden = true;
+  setState("connecting");
+  try {
+    audioCtx ??= new AudioContext();
+    await audioCtx.resume();
+    const { url, token } = await (await fetch("/token")).json();
+    room = new Room();
+    room.registerTextStreamHandler("lk.transcription", onTranscription);
+    room.registerTextStreamHandler("reference", onReference);
+    room.on(RoomEvent.TrackSubscribed, (track) => {
+      if (track.kind !== Track.Kind.Audio) return;
+      document.body.append(track.attach());
+      meters.agent = makeMeter(track.mediaStreamTrack);
+    });
+    room.on(RoomEvent.ParticipantConnected, (p) => {
+      if (p.kind !== ParticipantKind.AGENT) return;
+      startTimer();
+      applyAgentState(p.attributes["lk.agent.state"] ?? "initializing");
+    });
+    room.on(RoomEvent.ParticipantAttributesChanged, (changed, p) => {
+      if (p.kind === ParticipantKind.AGENT && "lk.agent.state" in changed) applyAgentState(changed["lk.agent.state"]);
+    });
+    room.on(RoomEvent.Disconnected, onEnded);
+    await room.connect(url, token);
+    await room.localParticipant.setMicrophoneEnabled(true);
+    const mic = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    meters.mic = makeMeter(mic.track.mediaStreamTrack);
+  } catch (error) {
+    room?.removeAllListeners();
+    room?.disconnect();
+    room = null;
+    setState("idle");
+    stateEl.textContent = `Could not connect: ${error.message}`;
+    toggle.disabled = false;
+    return;
+  }
+  setState("joining");
+  setConnectedUi(true);
+  toggle.disabled = false;
+  message.focus();
+  animate();
+}
+
+function onEnded() {
+  room = null;
+  clearInterval(timerId);
+  meters = { agent: null, mic: null };
+  document.querySelectorAll("audio").forEach((el) => el.remove());
+  orb.style.setProperty("--level", 0);
+  setState("ended");
+  setConnectedUi(false);
+  toggle.textContent = "Start new session";
+  toggle.disabled = false;
+}
+
+toggle.addEventListener("click", () => (room ? room.disconnect() : start()));
+
+muteBtn.addEventListener("click", async () => {
+  muted = !muted;
+  await room.localParticipant.setMicrophoneEnabled(!muted);
+  muteBtn.setAttribute("aria-pressed", String(muted));
+  muteBtn.setAttribute("aria-label", muted ? "Unmute microphone" : "Mute microphone");
+  slash.hidden = !muted;
+  render();
+});
+
+composer.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = message.value.trim();
+  if (!text || !room) return;
+  message.value = "";
+  bubbleFor(`typed-${++localTurns}`, "customer").textContent = text;
+  await room.localParticipant.sendText(text, { topic: "lk.chat" });
+});
+</script>
+</body>
+</html>

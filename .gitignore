@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+.ruff_cache/
+docs/
+
+
+.claude/
+
+implemented.md
+PRODUCTION_PLAN.md
