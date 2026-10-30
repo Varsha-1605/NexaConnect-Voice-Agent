@@ -1,0 +1,62 @@
+# How customers actually ask, and the FAQ question whose answer must come back in the top 3 results.
+# Add 3-5 questions for every new document. `expect` is the exact FAQ question (without "Q: ").
+- ask: what internet plans do you have
+  expect: What internet plans does NexaConnect offer?
+- ask: how many plans are there and what speeds
+  expect: What internet plans does NexaConnect offer?
+- ask: what's good for just browsing and email
+  expect: Which plan is suitable for basic internet use?
+- ask: I have a big family with lots of phones and TVs
+  expect: Which plan is suitable for a household with several devices?
+- ask: which plan is for gamers and big downloads
+  expect: Which plan is suitable for heavy internet use?
+- ask: best plan for working from home
+  expect: Which plan is best for working from home?
+- ask: do I really get 500 megabits
+  expect: Are the advertised speeds guaranteed?
+- ask: how much is Home 300 a month
+  expect: How much does Home 300 cost per month?
+- ask: price of the 500 plan
+  expect: How much does Home 500 cost per month?
+- ask: what does gigabit cost
+  expect: How much does Home Gigabit cost per month?
+- ask: is the router included
+  expect: Is router rental included in the monthly plan price?
+- ask: how much is the router rental
+  expect: Is router rental included in the monthly plan price?
+- ask: can I bring my own modem
+  expect: Can I use my own router?
+- ask: do you charge for installation
+  expect: Is installation free?
+- ask: is there a setup fee for the technician
+  expect: Is installation free?
+- ask: are taxes extra
+  expect: Are taxes included in the prices?
+- ask: any promotions or hidden fees
+  expect: Are there any other fees or discounts?
+- ask: is there a data cap
+  expect: Do the plans have data limits?
+- ask: do I have to sign a contract
+  expect: Is there a contract?
+- ask: what happens if I cancel early
+  expect: Are there early termination fees?
+- ask: when does my cancellation take effect
+  expect: When does a cancellation take effect?
+- ask: which cities do you cover
+  expect: Which cities does NexaConnect serve?
+- ask: do you serve my area
+  expect: Is NexaConnect available at my address?
+- ask: are all the plans available where I live
+  expect: Is every plan available at every address?
+- ask: when can the technician come
+  expect: When can installation happen?
+- ask: does the installation price depend on my address
+  expect: Can installation fees vary by address?
+- ask: what's the difference between 300 and 500
+  expect: What is the difference between Home 300 and Home 500?
+- ask: is gigabit worth it over the 500 plan
+  expect: What is the difference between Home 500 and Home Gigabit?
+- ask: can I switch plans before I order
+  expect: Can I change my plan before placing the order?
+- ask: what should I check before I sign up
+  expect: What should I check before agreeing to a plan?

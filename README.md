@@ -189,3 +189,11 @@ prompts/        System prompts for the primary agent and each workflow
 docs/           Workflow specs and architecture notes
 web/            Browser frontend
 ```
+
+## Tests
+
+```bash
+uv run pytest tests/unit tests/agent/test_enrollment_tools.py tests/agent/test_verification_tools.py   # fast, no network
+uv run pytest tests/agent/test_conversation.py   # talks to the real model (needs LiveKit credentials in .env)
+uv run python -m kb.ingest --namespace test && uv run pytest tests/retrieval   # search quality, needs Pinecone + OpenAI keys
+```
