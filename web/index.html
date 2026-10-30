@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' wss://*.livekit.cloud https://*.livekit.cloud https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self' https://*.lambda-url.ap-southeast-2.on.aws wss://*.livekit.cloud https://*.livekit.cloud https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; base-uri 'none'; object-src 'none'; form-action 'none'">
 <title>NexaConnect Support</title>
 <style>
   :root {
@@ -369,7 +369,10 @@ const toggle = $("toggle"), muteBtn = $("mute"), slash = $("slash");
 // Cloudflare Turnstile proves the visitor is a person before the server hands out a call token.
 // This is Cloudflare's test key (it always passes) so the page works on your own computer. The real
 // site key replaces it before deploy; a real server rejects tokens made with the test key.
-const TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
+const TURNSTILE_SITE_KEY = "0x4AAAAAAFsfNJNhrZslJYH5";
+// Where the page asks for a call token. "/api/token" works when the page and the Lambda share one address
+// (local server, CloudFront). On Cloudflare Pages use the full Lambda address, ending in /api/token.
+const TOKEN_API_URL = "https://mrplr3daom4ksaeskokshxckra0ygoba.lambda-url.ap-southeast-2.on.aws/api/token";
 let checkToken = null, checkWidget = null, checkTries = 0;
 
 function setupCheck() {
@@ -600,7 +603,7 @@ async function start() {
     if (!check) throw new Error("the security check is not finished yet. Please wait a moment and try again");
     let response;
     try {
-      response = await fetch("/api/token", {
+      response = await fetch(TOKEN_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ turnstile: check }),

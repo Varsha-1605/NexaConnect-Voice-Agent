@@ -6,6 +6,9 @@ POST /api/token   body: {"turnstile": "<token from the page>"}
 Only the Python standard library is used, so the code can be pasted into the Lambda console.
 Environment variables (encrypted): LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET,
 TURNSTILE_SECRET, AGENT_NAME.
+Optional: ALLOWED_ORIGIN, the address of the page when it is hosted somewhere else than this Lambda's own
+domain (for example https://nexaconnect-web.pages.dev). Several can be given, separated by commas.
+When the page and this Lambda share one address (CloudFront), leave it unset.
 """
 
 import base64
@@ -24,12 +27,21 @@ TURNSTILE_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 TURNSTILE_TIMEOUT_SECONDS = 3
 
 
-def reply(status: int, body: dict) -> dict:
+def reply(status: int, body: dict, extra_headers: dict | None = None) -> dict:
     return {
         "statusCode": status,
-        "headers": {"Content-Type": "application/json", "Cache-Control": "no-store"},
+        "headers": {"Content-Type": "application/json", "Cache-Control": "no-store", **(extra_headers or {})},
         "body": json.dumps(body),
     }
+
+
+def cors_headers(event: dict) -> dict:
+    """Let the browser read the answer only when the request comes from an allowed page."""
+    allowed = {item.strip() for item in os.environ.get("ALLOWED_ORIGIN", "").split(",") if item.strip()}
+    origin = (event.get("headers") or {}).get("origin", "")
+    if origin not in allowed:
+        return {}
+    return {"Access-Control-Allow-Origin": origin, "Vary": "Origin"}
 
 
 def log(event: str, **fields) -> None:
@@ -77,21 +89,31 @@ def make_token(api_key: str, api_secret: str, room: str, identity: str, agent_na
 
 def lambda_handler(event, context):
     http = event.get("requestContext", {}).get("http", {})
-    if http.get("method") != "POST" or not http.get("path", "").endswith("/api/token"):
+    cors = cors_headers(event)
+    if not http.get("path", "").endswith("/api/token"):
+        return reply(404, {"error": "not found"})
+    if http.get("method") == "OPTIONS":  # the browser's permission check before the real request
+        if not cors:
+            return reply(403, {"error": "origin not allowed"})
+        return {
+            "statusCode": 204,
+            "headers": {**cors, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400"},
+        }
+    if http.get("method") != "POST":
         return reply(404, {"error": "not found"})
 
     body = event.get("body") or ""
     if event.get("isBase64Encoded"):
         body = base64.b64decode(body).decode("utf-8", "replace")
     if len(body) > MAX_BODY_BYTES:
-        return reply(413, {"error": "request too large"})
+        return reply(413, {"error": "request too large"}, cors)
     try:
         turnstile_token = json.loads(body).get("turnstile")
     except (ValueError, AttributeError):
         turnstile_token = None
     if not isinstance(turnstile_token, str) or not turnstile_token:
         log("token_refused", reason="no_turnstile_token")
-        return reply(400, {"error": "missing check"})
+        return reply(400, {"error": "missing check"}, cors)
 
     forwarded = (event.get("headers") or {}).get("x-forwarded-for", "")
     visitor_ip = forwarded.split(",")[0].strip() or None
@@ -99,10 +121,10 @@ def lambda_handler(event, context):
         passed = turnstile_passed(turnstile_token, visitor_ip)
     except Exception as error:  # Turnstile unreachable or slow: refuse, never let people through unchecked
         log("turnstile_unavailable", error=type(error).__name__)
-        return reply(503, {"error": "check unavailable, please try again"})
+        return reply(503, {"error": "check unavailable, please try again"}, cors)
     if not passed:
         log("token_refused", reason="turnstile_failed")
-        return reply(403, {"error": "check failed"})
+        return reply(403, {"error": "check failed"}, cors)
 
     token = make_token(
         os.environ["LIVEKIT_API_KEY"],
@@ -112,4 +134,4 @@ def lambda_handler(event, context):
         agent_name=os.environ["AGENT_NAME"],
     )
     log("token_issued")
-    return reply(200, {"url": os.environ["LIVEKIT_URL"], "token": token})
+    return reply(200, {"url": os.environ["LIVEKIT_URL"], "token": token}, cors)

@@ -119,3 +119,59 @@ def test_the_token_is_never_written_to_the_log(monkeypatch, capsys):
     pass_check(monkeypatch)
     token = json.loads(handler.lambda_handler(request('{"turnstile": "ok"}'), None)["body"])["token"]
     assert token not in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- CORS (page hosted on another address)
+PAGE = "https://nexaconnect-web.pages.dev"
+
+
+def from_origin(origin, method="POST", body='{"turnstile": "ok"}'):
+    event = request(body, method=method)
+    event["headers"] = {"origin": origin}
+    return event
+
+
+def test_allowed_page_can_read_the_answer(monkeypatch):
+    pass_check(monkeypatch)
+    monkeypatch.setenv("ALLOWED_ORIGIN", PAGE)
+    result = handler.lambda_handler(from_origin(PAGE), None)
+    assert result["statusCode"] == 200 and result["headers"]["Access-Control-Allow-Origin"] == PAGE
+
+
+def test_another_page_gets_no_cors_headers(monkeypatch):
+    pass_check(monkeypatch)
+    monkeypatch.setenv("ALLOWED_ORIGIN", PAGE)
+    result = handler.lambda_handler(from_origin("https://evil.example"), None)
+    assert "Access-Control-Allow-Origin" not in result["headers"]
+
+
+def test_no_cors_headers_when_no_origin_is_configured(monkeypatch):
+    pass_check(monkeypatch)
+    result = handler.lambda_handler(from_origin(PAGE), None)
+    assert "Access-Control-Allow-Origin" not in result["headers"]
+
+
+def test_several_allowed_pages(monkeypatch):
+    pass_check(monkeypatch)
+    monkeypatch.setenv("ALLOWED_ORIGIN", f"https://a.example, {PAGE}")
+    assert handler.lambda_handler(from_origin(PAGE), None)["headers"]["Access-Control-Allow-Origin"] == PAGE
+
+
+def test_preflight_from_the_allowed_page(monkeypatch):
+    monkeypatch.setenv("ALLOWED_ORIGIN", PAGE)
+    result = handler.lambda_handler(from_origin(PAGE, method="OPTIONS", body=""), None)
+    assert result["statusCode"] == 204
+    assert result["headers"]["Access-Control-Allow-Origin"] == PAGE
+    assert result["headers"]["Access-Control-Allow-Methods"] == "POST"
+
+
+def test_preflight_from_another_page_is_refused(monkeypatch):
+    monkeypatch.setenv("ALLOWED_ORIGIN", PAGE)
+    assert handler.lambda_handler(from_origin("https://evil.example", method="OPTIONS", body=""), None)["statusCode"] == 403
+
+
+def test_errors_also_carry_the_cors_header_so_the_page_can_show_them(monkeypatch):
+    pass_check(monkeypatch, passed=False)
+    monkeypatch.setenv("ALLOWED_ORIGIN", PAGE)
+    result = handler.lambda_handler(from_origin(PAGE), None)
+    assert result["statusCode"] == 403 and result["headers"]["Access-Control-Allow-Origin"] == PAGE
