@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import threading
+import time
 
 from dotenv import load_dotenv
 from livekit import agents, api, rtc
@@ -11,7 +12,6 @@ from livekit.agents import (
     AgentSession,
     ConversationItemAddedEvent,
     ErrorEvent,
-    RoomInputOptions,
     RunContext,
     ToolError,
     TurnHandlingOptions,
@@ -19,6 +19,7 @@ from livekit.agents import (
     function_tool,
     get_job_context,
     inference,
+    room_io,
 )
 from livekit.agents.beta.tools import EndCallTool
 from livekit.agents.llm import ChatMessage
@@ -53,8 +54,9 @@ from workflows.shared_tools import search_knowledge_base
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+# LiveKit sets up the log handlers; adding another one here printed every line twice.
 logger = logging.getLogger("voice-agent")
+logger.setLevel(logging.INFO)
 
 
 class PrimaryAgent(Agent):
@@ -324,8 +326,15 @@ async def entrypoint(ctx: agents.JobContext):
         if latency:
             logger.info("Turn latency (s): %s", latency)
 
+    call_started = time.monotonic()
+
     async def log_usage() -> None:
         logger.info("Call usage: %s", session.usage.model_usage)
+        logger.info(
+            "Call ended after %.0f s",
+            time.monotonic() - call_started,
+            extra={"event": "call_ended", "duration_s": round(time.monotonic() - call_started)},
+        )
 
     ctx.add_shutdown_callback(log_usage)
 
@@ -343,9 +352,11 @@ async def entrypoint(ctx: agents.JobContext):
     await session.start(
         room=ctx.room,
         agent=PrimaryAgent(),
-        room_input_options=RoomInputOptions(
-            noise_cancellation=ai_coustics.audio_enhancement(
-                model=ai_coustics.EnhancerModel.QUAIL_VF_L,
+        room_options=room_io.RoomOptions(
+            audio_input=room_io.AudioInputOptions(
+                noise_cancellation=ai_coustics.audio_enhancement(
+                    model=ai_coustics.EnhancerModel.QUAIL_VF_L,
+                ),
             ),
         ),
     )
