@@ -21,6 +21,8 @@ Sign-ups, account updates, billing questions and cancellations, by phone or in t
 > [!NOTE]
 > Live demo: **<https://nexaconnect-web.pages.dev>**. Click **Start session**, allow the microphone and talk to Ashley.
 
+<img width="1452" alt="NexaConnect voice agent demo" src="https://github.com/user-attachments/assets/132bc0d2-ab50-48da-a114-372fd101da8f" />
+
 ## Overview
 
 NexaConnect is an internet provider whose support line handles four requests: new sign-ups, account updates, billing questions and cancellations. With human agents only, callers wait in queues, hear inconsistent answers, and routine work takes time away from harder cases.
